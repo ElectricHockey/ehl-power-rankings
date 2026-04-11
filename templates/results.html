@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EHL Power Rankings – Results</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #111;
+      color: #eee;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    header {
+      text-align: center;
+      padding: 40px 20px 10px;
+    }
+    header h1 {
+      font-size: 2.2rem;
+      color: #ffd700;
+      text-transform: uppercase;
+      letter-spacing: 3px;
+    }
+    header p { color: #aaa; margin-top: 6px; }
+    .card {
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 12px;
+      padding: 28px;
+      margin: 24px 20px;
+      max-width: 800px;
+      width: 100%;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 20px;
+    }
+    th {
+      text-align: left;
+      padding: 10px 8px;
+      border-bottom: 2px solid #ffd700;
+      color: #ffd700;
+      font-size: .9rem;
+      text-transform: uppercase;
+    }
+    td {
+      padding: 10px 8px;
+      border-bottom: 1px solid #222;
+      font-size: .95rem;
+    }
+    tr:nth-child(even) td { background: #161616; }
+    .rank { font-weight: 800; color: #ffd700; font-size: 1.1rem; }
+    .preview {
+      text-align: center;
+      margin: 24px 0;
+    }
+    .preview img {
+      max-width: 100%;
+      border-radius: 10px;
+      border: 2px solid #333;
+    }
+    .actions {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .btn {
+      display: inline-block;
+      padding: 14px 28px;
+      font-size: 1rem;
+      font-weight: 700;
+      text-decoration: none;
+      border-radius: 8px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      transition: background .2s;
+    }
+    .btn-primary {
+      color: #000;
+      background: #ffd700;
+    }
+    .btn-primary:hover { background: #e6c200; }
+    .btn-secondary {
+      color: #eee;
+      background: #333;
+      border: 1px solid #555;
+    }
+    .btn-secondary:hover { background: #444; }
+    footer {
+      margin-top: auto;
+      padding: 20px;
+      color: #555;
+      font-size: .85rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🏒 Power Rankings</h1>
+    <p>{{ div_label }} {{ week_label }}</p>
+  </header>
+
+  <div class="card">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Team</th>
+          <th>Record</th>
+          <th>Pts</th>
+          <th>GD</th>
+          <th>Score</th>
+          <th>Streak</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in results %}
+        <tr>
+          <td class="rank">{{ t.rank }}</td>
+          <td>{{ t.name }}</td>
+          <td>{{ t.record }}</td>
+          <td>{{ t.points }}</td>
+          <td>{{ t.gd }}</td>
+          <td>{{ t.score }}</td>
+          <td>{{ t.streak }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2 style="text-align:center;margin-bottom:16px;color:#ffd700;">Preview</h2>
+    <div class="preview">
+      <img src="{{ url_for('download', filename=image_file) }}" alt="Power Rankings Image">
+    </div>
+    <div class="actions">
+      <a class="btn btn-primary" href="{{ url_for('download', filename=image_file) }}">⬇ Download Image</a>
+      <a class="btn btn-secondary" href="{{ url_for('index') }}">← Upload New CSV</a>
+    </div>
+  </div>
+
+  <footer>EHL Power Rankings Generator</footer>
+</body>
+</html>

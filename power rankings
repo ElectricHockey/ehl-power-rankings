@@ -1,0 +1,421 @@
+import csv
+import re
+from collections import defaultdict
+from io import StringIO
+
+# ============================================================
+# NHL-STYLE POWER RANKINGS ENGINE
+# For EHL (Electric Hockey League) Schedule
+# ============================================================
+
+# --- SCORING WEIGHTS (tweak these to adjust ranking feel) ---
+WEIGHT_PPG          = 0.35   # Points Per Game (season)
+WEIGHT_GOAL_DIFF    = 0.20   # Goal Differential Per Game
+WEIGHT_RECENT_FORM  = 0.25   # Last 10 games performance
+WEIGHT_WIN_STREAK   = 0.10   # Current win/loss streak
+WEIGHT_FORFEIT_PEN  = 0.10   # Forfeit penalty factor
+
+# Points system
+WIN_PTS   = 2
+OTL_PTS   = 1
+LOSS_PTS  = 0
+
+# ============================================================
+# DATA STRUCTURES
+# ============================================================
+
+class Team:
+    def __init__(self, name):
+        self.name = name
+        self.wins = 0
+        self.losses = 0
+        self.otl = 0           # Overtime losses
+        self.goals_for = 0
+        self.goals_against = 0
+        self.forfeits_given = 0    # Times THEY forfeited (penalized)
+        self.forfeits_received = 0 # Times opponent forfeited (free win)
+        self.game_log = []         # List of results in order: 'W','L','OTL'
+        self.points_log = []       # Points earned each game in order
+
+    @property
+    def games_played(self):
+        return self.wins + self.losses + self.otl
+
+    @property
+    def points(self):
+        return (self.wins * WIN_PTS) + (self.otl * OTL_PTS)
+
+    @property
+    def ppg(self):
+        return self.points / self.games_played if self.games_played > 0 else 0
+
+    @property
+    def goal_diff(self):
+        return self.goals_for - self.goals_against
+
+    @property
+    def goal_diff_per_game(self):
+        return self.goal_diff / self.games_played if self.games_played > 0 else 0
+
+    @property
+    def recent_form(self):
+        """Points earned in last 10 games, normalized 0-1 (max = 20 pts)"""
+        last10 = self.points_log[-10:]
+        if not last10:
+            return 0
+        return sum(last10) / (WIN_PTS * len(last10))
+
+    @property
+    def current_streak(self):
+        """Returns (streak_type, count) e.g. ('W', 3) or ('L', 2)"""
+        if not self.game_log:
+            return ('None', 0)
+        streak_type = self.game_log[-1]
+        count = 0
+        for result in reversed(self.game_log):
+            if result == streak_type:
+                count += 1
+            else:
+                break
+        return (streak_type, count)
+
+    @property
+    def streak_score(self):
+        """Win streak = positive bonus, loss streak = negative penalty, normalized"""
+        stype, count = self.current_streak
+        if stype == 'W':
+            return min(count / 10.0, 1.0)   # Cap at 10-game streak
+        elif stype == 'L':
+            return max(-count / 10.0, -1.0)
+        return 0.0
+
+    @property
+    def forfeit_penalty(self):
+        """Penalize teams that forfeit. Returns a 0-1 scale (1 = no forfeits)"""
+        if self.games_played == 0:
+            return 1.0
+        penalty = self.forfeits_given / self.games_played
+        return max(0.0, 1.0 - penalty)
+
+    def record_str(self):
+        return f"{self.wins}-{self.losses}-{self.otl}"
+
+
+# ============================================================
+# CSV PARSER
+# ============================================================
+
+def parse_schedule(csv_text):
+    """
+    Parses the EHL schedule CSV and returns a dict of Team objects.
+    Only processes Completed and Forfeit games (not Incomplete/In Progress).
+    """
+    teams = {}
+
+    def get_team(name):
+        name = name.strip()
+        if name not in teams:
+            teams[name] = Team(name)
+        return teams[name]
+
+    lines = csv_text.strip().split('\n')
+    reader = csv.reader(lines)
+
+    for row in reader:
+        # Skip header row and date rows
+        if len(row) < 8:
+            continue
+        if row[0].startswith('Date') or row[0].startswith('"') or not row[0].strip():
+            continue
+
+        game_num_time = row[0].strip()
+        # Check it's a game row (starts with digits)
+        if not re.match(r'^\d+', game_num_time):
+            continue
+
+        home_name   = row[1].strip()
+        away_name   = row[4].strip() if len(row) > 4 else ''
+        status      = row[7].strip() if len(row) > 7 else ''
+
+        # Skip incomplete or in-progress games
+        if status.lower() in ('incomplete', 'in progress', ''):
+            continue
+
+        # Skip if team names are missing
+        if not home_name or not away_name:
+            continue
+
+        home_team = get_team(home_name)
+        away_team = get_team(away_name)
+
+        # Parse scores
+        home_score_raw = row[2].strip() if len(row) > 2 else ''
+        away_score_raw = row[3].strip() if len(row) > 3 else ''  # OT marker sometimes here
+
+        # Handle OT notation (e.g., "7,OT,8" -> OT game)
+        is_ot = False
+        # Check if the middle column contains "OT"
+        middle = row[3].strip() if len(row) > 3 else ''
+        if middle.upper() == 'OT':
+            is_ot = True
+            away_score_raw = row[4].strip() if len(row) > 4 else ''
+            away_name = row[5].strip() if len(row) > 5 else away_name
+            away_team = get_team(away_name)
+
+        try:
+            home_score = int(home_score_raw)
+            away_score = int(away_score_raw)
+        except ValueError:
+            continue
+
+        # ---- FORFEIT HANDLING ----
+        if status.lower() == 'forfeit':
+            # In your data: the loser forfeited.
+            # Score of 1-0 means the team with 0 forfeited.
+            if home_score > away_score:
+                # Away team forfeited
+                away_team.forfeits_given += 1
+                home_team.forfeits_received += 1
+                home_team.wins += 1
+                home_team.game_log.append('W')
+                home_team.points_log.append(WIN_PTS)
+                away_team.losses += 1
+                away_team.game_log.append('L')
+                away_team.points_log.append(LOSS_PTS)
+            else:
+                # Home team forfeited
+                home_team.forfeits_given += 1
+                away_team.forfeits_received += 1
+                away_team.wins += 1
+                away_team.game_log.append('W')
+                away_team.points_log.append(WIN_PTS)
+                home_team.losses += 1
+                home_team.game_log.append('L')
+                home_team.points_log.append(LOSS_PTS)
+            # Goals NOT counted for forfeits (don't reward/penalize GD on forfeits)
+
+        # ---- COMPLETED GAME HANDLING ----
+        elif status.lower() == 'completed':
+            home_team.goals_for     += home_score
+            home_team.goals_against += away_score
+            away_team.goals_for     += away_score
+            away_team.goals_against += home_score
+
+            if home_score > away_score:
+                if is_ot:
+                    # OT win for home = regulation loss for away (OTL)
+                    home_team.wins += 1
+                    home_team.game_log.append('W')
+                    home_team.points_log.append(WIN_PTS)
+                    away_team.otl += 1
+                    away_team.game_log.append('OTL')
+                    away_team.points_log.append(OTL_PTS)
+                else:
+                    home_team.wins += 1
+                    home_team.game_log.append('W')
+                    home_team.points_log.append(WIN_PTS)
+                    away_team.losses += 1
+                    away_team.game_log.append('L')
+                    away_team.points_log.append(LOSS_PTS)
+            else:
+                if is_ot:
+                    away_team.wins += 1
+                    away_team.game_log.append('W')
+                    away_team.points_log.append(WIN_PTS)
+                    home_team.otl += 1
+                    home_team.game_log.append('OTL')
+                    home_team.points_log.append(OTL_PTS)
+                else:
+                    away_team.wins += 1
+                    away_team.game_log.append('W')
+                    away_team.points_log.append(WIN_PTS)
+                    home_team.losses += 1
+                    home_team.game_log.append('L')
+                    home_team.points_log.append(LOSS_PTS)
+
+    return teams
+
+
+# ============================================================
+# NORMALIZATION
+# ============================================================
+
+def normalize(value, min_val, max_val):
+    """Min-max normalization to 0-1 scale."""
+    if max_val == min_val:
+        return 0.5  # All teams equal on this metric
+    return (value - min_val) / (max_val - min_val)
+
+
+# ============================================================
+# POWER SCORE CALCULATOR
+# ============================================================
+
+def calculate_power_scores(teams):
+    """
+    Calculates a composite power score for each team.
+    Returns a list of (team, score, breakdown) tuples sorted best to worst.
+    """
+    team_list = [t for t in teams.values() if t.games_played > 0]
+
+    if not team_list:
+        return []
+
+    # --- Gather raw values ---
+    ppg_vals        = [t.ppg for t in team_list]
+    gd_vals         = [t.goal_diff_per_game for t in team_list]
+    recent_vals     = [t.recent_form for t in team_list]
+    streak_vals     = [t.streak_score for t in team_list]
+    forfeit_vals    = [t.forfeit_penalty for t in team_list]
+
+    # --- Min/Max for normalization ---
+    def mn(lst): return min(lst)
+    def mx(lst): return max(lst)
+
+    results = []
+    for t in team_list:
+        norm_ppg        = normalize(t.ppg,                mn(ppg_vals),     mx(ppg_vals))
+        norm_gd         = normalize(t.goal_diff_per_game, mn(gd_vals),      mx(gd_vals))
+        norm_recent     = t.recent_form   # Already 0-1
+        norm_streak     = (t.streak_score + 1) / 2  # Convert -1..1 to 0..1
+        norm_forfeit    = t.forfeit_penalty           # Already 0-1
+
+        score = (
+            norm_ppg     * WEIGHT_PPG        +
+            norm_gd      * WEIGHT_GOAL_DIFF  +
+            norm_recent  * WEIGHT_RECENT_FORM +
+            norm_streak  * WEIGHT_WIN_STREAK  +
+            norm_forfeit * WEIGHT_FORFEIT_PEN
+        )
+
+        breakdown = {
+            'ppg':          round(norm_ppg, 3),
+            'goal_diff':    round(norm_gd, 3),
+            'recent_form':  round(norm_recent, 3),
+            'streak':       round(norm_streak, 3),
+            'forfeit':      round(norm_forfeit, 3),
+        }
+        results.append((t, round(score, 4), breakdown))
+
+    # Sort by score descending
+    results.sort(key=lambda x: x[1], reverse=True)
+    return results
+
+
+# ============================================================
+# WEEKLY RANKINGS (last 7 days of completed games)
+# ============================================================
+
+def calculate_weekly_scores(teams_weekly):
+    """Same as power scores but for a subset of games (weekly)."""
+    return calculate_power_scores(teams_weekly)
+
+
+# ============================================================
+# DISPLAY
+# ============================================================
+
+def print_rankings(rankings, title="POWER RANKINGS", show_breakdown=True):
+    print(f"\n{'='*65}")
+    print(f"  🏒  {title}")
+    print(f"{'='*65}")
+    print(f"{'Rank':<5} {'Team':<28} {'Rec':>7} {'Pts':>5} {'GD':>5} {'Score':>7}")
+    print(f"{'-'*65}")
+
+    for rank, (team, score, bd) in enumerate(rankings, 1):
+        streak_type, streak_count = team.current_streak
+        streak_str = f"{streak_type}{streak_count}" if streak_count > 0 else "-"
+        gd = team.goal_diff
+        gd_str = f"+{gd}" if gd > 0 else str(gd)
+
+        print(f"#{rank:<4} {team.name:<28} {team.record_str():>7} {team.points:>5} {gd_str:>5} {score:>7.4f}")
+
+        if show_breakdown:
+            print(f"       {'PPG':>6} {'GD':>6} {'Recent':>8} {'Streak':>8} {'Forfeit':>9}")
+            print(f"       {bd['ppg']:>6.3f} {bd['goal_diff']:>6.3f} {bd['recent_form']:>8.3f} {bd['streak']:>8.3f} {bd['forfeit']:>9.3f}")
+            if team.forfeits_given > 0:
+                print(f"       ⚠️  Forfeits given: {team.forfeits_given}")
+            print()
+
+    print(f"{'='*65}\n")
+
+
+def print_movement(season_rankings, weekly_rankings):
+    """Shows how each team's weekly rank compares to season rank."""
+    season_ranks = {t.name: i+1 for i, (t, _, _) in enumerate(season_rankings)}
+    weekly_ranks = {t.name: i+1 for i, (t, _, _) in enumerate(weekly_rankings)}
+
+    print(f"\n{'='*65}")
+    print(f"  📊  WEEKLY vs SEASON RANKING MOVEMENT")
+    print(f"{'='*65}")
+    print(f"{'Team':<28} {'Season Rank':>12} {'Week Rank':>11} {'Movement':>10}")
+    print(f"{'-'*65}")
+
+    # Sort by season rank
+    for name in sorted(season_ranks, key=lambda n: season_ranks[n]):
+        s_rank = season_ranks.get(name, 'N/A')
+        w_rank = weekly_ranks.get(name, 'N/A')
+
+        if isinstance(s_rank, int) and isinstance(w_rank, int):
+            diff = s_rank - w_rank
+            if diff > 0:
+                move = f"▲ +{diff}"
+            elif diff < 0:
+                move = f"▼ {diff}"
+            else:
+                move = "  —"
+        else:
+            move = "N/A"
+
+        print(f"{name:<28} #{str(s_rank):<11} #{str(w_rank):<10} {move:>10}")
+
+    print(f"{'='*65}\n")
+
+
+# ============================================================
+# MAIN
+# ============================================================
+
+def run_rankings(csv_filepath):
+    with open(csv_filepath, 'r', encoding='utf-8') as f:
+        csv_text = f.read()
+
+    # --- SEASON RANKINGS (all completed games) ---
+    all_teams = parse_schedule(csv_text)
+    season_rankings = calculate_power_scores(all_teams)
+
+    print_rankings(season_rankings, title="SEASON POWER RANKINGS (All Games)")
+
+    # --- WEEKLY RANKINGS (most recent week only) ---
+    # Re-parse but only the last date block
+    # Splits by date sections and takes the most recent completed week
+    lines = csv_text.strip().split('\n')
+    date_indices = []
+    for i, line in enumerate(lines):
+        if re.match(r'^"[A-Za-z]+ [A-Za-z]+ \d+', line) or re.match(r'^[A-Za-z]+ [A-Za-z]+ \d+', line):
+            date_indices.append(i)
+
+    if len(date_indices) >= 2:
+        # Find the last week that has completed games
+        for start_idx in reversed(range(len(date_indices))):
+            start = date_indices[start_idx]
+            end = date_indices[start_idx + 1] if start_idx + 1 < len(date_indices) else len(lines)
+            week_chunk = '\n'.join(lines[:1] + lines[start:end])  # header + week
+
+            week_teams = parse_schedule(week_chunk)
+            if any(t.games_played > 0 for t in week_teams.values()):
+                week_label = lines[start].strip().strip('"')
+                weekly_rankings = calculate_power_scores(week_teams)
+                print_rankings(weekly_rankings, title=f"WEEKLY POWER RANKINGS — {week_label}", show_breakdown=False)
+                print_movement(season_rankings, weekly_rankings)
+                break
+    else:
+        print("Only one week of data found — showing season rankings only.")
+
+
+if __name__ == '__main__':
+    import sys
+    if len(sys.argv) < 2:
+        print("Usage: python power_rankings.py 'schedule_report 2(Sheet1).csv'")
+    else:
+        run_rankings(sys.argv[1])

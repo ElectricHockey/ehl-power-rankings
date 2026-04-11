@@ -133,8 +133,10 @@ def parse_schedule(csv_text):
         if not re.match(r'^\d+', game_num_time):
             continue
 
+        # CSV columns: 0=game#, 1=home, 2=home_score, 3=empty/OT,
+        #              4=away_score, 5=away, 6=empty, 7=status
         home_name   = row[1].strip()
-        away_name   = row[4].strip() if len(row) > 4 else ''
+        away_name   = row[5].strip() if len(row) > 5 else ''
         status      = row[7].strip() if len(row) > 7 else ''
 
         # Skip incomplete or in-progress games
@@ -148,19 +150,15 @@ def parse_schedule(csv_text):
         home_team = get_team(home_name)
         away_team = get_team(away_name)
 
-        # Parse scores
+        # Parse scores – home score is col 2, away score is col 4
         home_score_raw = row[2].strip() if len(row) > 2 else ''
-        away_score_raw = row[3].strip() if len(row) > 3 else ''  # OT marker sometimes here
+        away_score_raw = row[4].strip() if len(row) > 4 else ''
 
-        # Handle OT notation (e.g., "7,OT,8" -> OT game)
+        # Check if col 3 contains "OT" marker
         is_ot = False
-        # Check if the middle column contains "OT"
         middle = row[3].strip() if len(row) > 3 else ''
         if middle.upper() == 'OT':
             is_ot = True
-            away_score_raw = row[4].strip() if len(row) > 4 else ''
-            away_name = row[5].strip() if len(row) > 5 else away_name
-            away_team = get_team(away_name)
 
         try:
             home_score = int(home_score_raw)

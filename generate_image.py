@@ -13,14 +13,14 @@ from team_config import get_team_style
 
 # ── Layout constants ────────────────────────────────────────
 IMG_WIDTH = 1080
-ROW_HEIGHT = 88
+ROW_HEIGHT = 96
 HEADER_HEIGHT = 180
 TOP_PADDING = 20
 BOTTOM_PADDING = 30
-RANK_BOX_W = 70
+RANK_BOX_W = 80
 BAR_LEFT = RANK_BOX_W + 6
 BAR_RIGHT = IMG_WIDTH - 60
-LOGO_SIZE = 68
+LOGO_SIZE = 74
 MOVEMENT_X = IMG_WIDTH - 35
 
 BG_COLOR = (0, 0, 0)
@@ -109,11 +109,11 @@ def generate_rankings_image(
     draw = ImageDraw.Draw(img)
 
     # ── Fonts ───────────────────────────────────────────────
-    font_title = _load_font("Lato-Bold.ttf", 60)
-    font_subtitle = _load_font("Lato-Bold.ttf", 34)
-    font_rank = _load_font("Lato-Bold.ttf", 42)
-    font_team = _load_font("Lato-Bold.ttf", 30)
-    font_move = _load_font("Lato-Bold.ttf", 28)
+    font_title = _load_font("Lato-Black.ttf", 74)
+    font_subtitle = _load_font("Lato-BoldItalic.ttf", 42)
+    font_rank = _load_font("Lato-Black.ttf", 50)
+    font_team = _load_font("Lato-Heavy.ttf", 42)
+    font_move = _load_font("Lato-Bold.ttf", 34)
 
     # ── Header ──────────────────────────────────────────────
     ehl_logo = _load_ehl_logo(logo_dir, 100)
@@ -159,11 +159,14 @@ def generate_rankings_image(
         bar_x1, bar_y1 = BAR_RIGHT, y + ROW_HEIGHT - 4
         _draw_rounded_rect(draw, (bar_x0, bar_y0, bar_x1, bar_y1), 10, style["bar_color"])
 
-        # Team name text
+        # Team name text – centered in bar (between left edge and logo area)
         name_upper = team.name.upper()
         nb = draw.textbbox((0, 0), name_upper, font=font_team)
+        nw = nb[2] - nb[0]
         nh = nb[3] - nb[1]
-        text_x = bar_x0 + 16
+        logo_reserved = LOGO_SIZE + 24  # space reserved for logo on right
+        text_area_w = (bar_x1 - logo_reserved) - bar_x0
+        text_x = bar_x0 + (text_area_w - nw) // 2
         text_y = bar_y0 + (bar_y1 - bar_y0 - nh) // 2 - 2
         draw.text((text_x, text_y), name_upper, fill=style["text_color"], font=font_team)
 

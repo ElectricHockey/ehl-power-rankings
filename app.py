@@ -125,12 +125,20 @@ def generate():
 def download(filename):
     """Serve the generated image for download."""
     safe_name = os.path.basename(filename)
+    # Only allow expected filename pattern (hex UUID + .png)
+    if not safe_name.startswith("power_rankings_") or not safe_name.endswith(".png"):
+        flash("Invalid file request.", "error")
+        return redirect(url_for("index"))
     path = os.path.join(OUTPUT_DIR, safe_name)
-    if not os.path.isfile(path):
+    resolved = os.path.realpath(path)
+    if not resolved.startswith(os.path.realpath(OUTPUT_DIR)):
+        flash("Invalid file request.", "error")
+        return redirect(url_for("index"))
+    if not os.path.isfile(resolved):
         flash("Image not found. Please generate rankings again.", "error")
         return redirect(url_for("index"))
     return send_file(
-        path,
+        resolved,
         mimetype="image/png",
         as_attachment=True,
         download_name="ehl_power_rankings.png",
@@ -138,4 +146,4 @@ def download(filename):
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    app.run(debug=False, port=5000)

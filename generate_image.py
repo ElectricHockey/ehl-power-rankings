@@ -54,7 +54,7 @@ def _load_team_logo(logo_dir, filename, size):
     if not os.path.isfile(path):
         return None
     img = Image.open(path).convert("RGBA")
-    img = img.resize((size, size), Image.LANCZOS)
+    img = img.resize((size, size), Image.Resampling.LANCZOS)
     return img
 
 
@@ -64,7 +64,7 @@ def _load_ehl_logo(logo_dir, size):
     if not os.path.isfile(path):
         return None
     img = Image.open(path).convert("RGBA")
-    img.thumbnail((size, size), Image.LANCZOS)
+    img.thumbnail((size, size), Image.Resampling.LANCZOS)
     return img
 
 

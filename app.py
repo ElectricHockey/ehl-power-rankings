@@ -58,6 +58,13 @@ def generate():
 
     week_label = request.form.get("week_label", "WEEK 1").strip() or "WEEK 1"
     div_label = request.form.get("div_label", "3'S").strip() or "3'S"
+    top_n_raw = request.form.get("top_n", "").strip()
+    top_n = None  # default: show all teams
+    if top_n_raw:
+        try:
+            top_n = max(1, int(top_n_raw))
+        except ValueError:
+            pass
 
     # ── Save uploaded CSV ───────────────────────────────────
     csv_filename = f"{uuid.uuid4().hex}.csv"
@@ -73,7 +80,20 @@ def generate():
         rankings = engine.calculate_power_scores(teams)
 
         if not rankings:
-            flash("No completed games found in the CSV. Check the file format.", "error")
+            total_teams = len(teams)
+            if total_teams > 0:
+                flash(
+                    f"Found {total_teams} team(s) but none had completed games. "
+                    "Make sure the Status column (column 8) says 'Completed' or 'Forfeit'.",
+                    "error",
+                )
+            else:
+                flash(
+                    "No teams or games found in the CSV. "
+                    "Expected columns: Game#, Home, HomeScore, AwayScore, Away, …, …, Status. "
+                    "Rows must start with a number (game #).",
+                    "error",
+                )
             return redirect(url_for("index"))
 
     except Exception as exc:
@@ -94,11 +114,13 @@ def generate():
         division_label=div_label,
         logo_dir=LOGO_DIR,
         output_path=out_path,
+        top_n=top_n,
     )
 
     # ── Build a simple results table for the template ───────
+    teams_shown = rankings[:top_n] if top_n is not None else rankings
     results = []
-    for rank, (team, score, _bd) in enumerate(rankings[:10], 1):
+    for rank, (team, score, _bd) in enumerate(teams_shown, 1):
         stype, scount = team.current_streak
         streak = f"{stype}{scount}" if scount else "–"
         gd = team.goal_diff
@@ -118,6 +140,8 @@ def generate():
         image_file=out_filename,
         week_label=week_label,
         div_label=div_label,
+        total_ranked=len(rankings),
+        total_shown=len(teams_shown),
     )
 
 

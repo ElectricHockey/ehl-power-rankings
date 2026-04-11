@@ -64,7 +64,44 @@ DEFAULT_TEAM_STYLE = {
     "logo": None,
 }
 
+# Pool of distinct bar colors used for teams not in TEAM_CONFIG.
+# Each unknown team gets a unique color from this list (cycling if needed).
+_AUTO_COLORS = [
+    (180, 60, 30),    # Burnt orange
+    (50, 140, 80),    # Forest green
+    (160, 30, 120),   # Magenta
+    (40, 120, 160),   # Teal
+    (200, 160, 30),   # Gold
+    (100, 50, 150),   # Violet
+    (30, 90, 60),     # Dark teal
+    (170, 80, 80),    # Dusty rose
+    (60, 60, 140),    # Slate blue
+    (130, 100, 40),   # Olive
+    (90, 160, 160),   # Aqua
+    (140, 40, 70),    # Raspberry
+    (70, 110, 50),    # Moss
+    (110, 70, 130),   # Lavender
+    (180, 120, 60),   # Copper
+    (50, 80, 130),    # Steel
+    (160, 100, 100),  # Mauve
+    (80, 140, 100),   # Sage
+    (120, 60, 60),    # Brick
+    (60, 100, 120),   # Cadet
+]
+_auto_color_map = {}
+
 
 def get_team_style(team_name):
-    """Return the style dict for a team, falling back to defaults."""
-    return TEAM_CONFIG.get(team_name, DEFAULT_TEAM_STYLE)
+    """Return the style dict for a team, auto-assigning a unique color
+    to teams not listed in TEAM_CONFIG."""
+    if team_name in TEAM_CONFIG:
+        return TEAM_CONFIG[team_name]
+
+    if team_name not in _auto_color_map:
+        idx = len(_auto_color_map) % len(_AUTO_COLORS)
+        _auto_color_map[team_name] = {
+            "bar_color": _AUTO_COLORS[idx],
+            "text_color": (255, 255, 255),
+            "logo": None,
+        }
+    return _auto_color_map[team_name]

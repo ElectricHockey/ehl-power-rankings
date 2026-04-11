@@ -81,7 +81,7 @@ def generate_rankings_image(
     division_label="3'S",
     logo_dir="logos",
     output_path="power_rankings.png",
-    top_n=10,
+    top_n=None,
 ):
     """
     Generate the power rankings image.
@@ -98,10 +98,13 @@ def generate_rankings_image(
         Directory containing team logo PNGs and ehl_logo.png.
     output_path : str
         Where to save the resulting image.
-    top_n : int
-        How many teams to show (default 10).
+    top_n : int or None
+        How many teams to show. None means show all ranked teams.
     """
-    teams_to_show = ranked_teams[:top_n]
+    if top_n is not None:
+        teams_to_show = ranked_teams[:top_n]
+    else:
+        teams_to_show = ranked_teams
     num_rows = len(teams_to_show)
     img_height = HEADER_HEIGHT + TOP_PADDING + num_rows * ROW_HEIGHT + BOTTOM_PADDING
 

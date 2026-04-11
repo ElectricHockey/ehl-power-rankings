@@ -9,18 +9,18 @@ import os
 import math
 from PIL import Image, ImageDraw, ImageFont
 
-from team_config import get_team_style
+from team_config import get_team_style, hex_to_rgb
 
 # ── Layout constants ────────────────────────────────────────
 IMG_WIDTH = 1080
-ROW_HEIGHT = 96
-HEADER_HEIGHT = 180
-TOP_PADDING = 20
-BOTTOM_PADDING = 30
-RANK_BOX_W = 80
+ROW_HEIGHT = 104
+HEADER_HEIGHT = 210
+TOP_PADDING = 10
+BOTTOM_PADDING = 20
+RANK_BOX_W = 90
 BAR_LEFT = RANK_BOX_W + 6
 BAR_RIGHT = IMG_WIDTH - 60
-LOGO_SIZE = 74
+LOGO_SIZE = 82
 MOVEMENT_X = IMG_WIDTH - 35
 
 BG_COLOR = (0, 0, 0)
@@ -82,6 +82,7 @@ def generate_rankings_image(
     logo_dir="logos",
     output_path="power_rankings.png",
     top_n=10,
+    color_overrides=None,
 ):
     """
     Generate the power rankings image.
@@ -100,7 +101,11 @@ def generate_rankings_image(
         Where to save the resulting image.
     top_n : int
         How many teams to show in the image (default 10).
+    color_overrides : dict or None
+        Optional {team_name: "#RRGGBB"} to override bar colors.
     """
+    if color_overrides is None:
+        color_overrides = {}
     teams_to_show = ranked_teams[:top_n]
     num_rows = len(teams_to_show)
     img_height = HEADER_HEIGHT + TOP_PADDING + num_rows * ROW_HEIGHT + BOTTOM_PADDING
@@ -109,27 +114,27 @@ def generate_rankings_image(
     draw = ImageDraw.Draw(img)
 
     # ── Fonts ───────────────────────────────────────────────
-    font_title = _load_font("Lato-Black.ttf", 74)
-    font_subtitle = _load_font("Lato-BoldItalic.ttf", 42)
-    font_rank = _load_font("Lato-Black.ttf", 50)
-    font_team = _load_font("Lato-Heavy.ttf", 42)
-    font_move = _load_font("Lato-Bold.ttf", 34)
+    font_title = _load_font("Lato-Black.ttf", 96)
+    font_subtitle = _load_font("Lato-BoldItalic.ttf", 56)
+    font_rank = _load_font("Lato-Black.ttf", 60)
+    font_team = _load_font("Lato-Heavy.ttf", 56)
+    font_move = _load_font("Lato-Bold.ttf", 36)
 
     # ── Header ──────────────────────────────────────────────
-    ehl_logo = _load_ehl_logo(logo_dir, 100)
+    ehl_logo = _load_ehl_logo(logo_dir, 130)
     if ehl_logo:
-        img.paste(ehl_logo, (20, 20), ehl_logo)
-        img.paste(ehl_logo, (IMG_WIDTH - 20 - ehl_logo.width, 20), ehl_logo)
+        img.paste(ehl_logo, (20, 15), ehl_logo)
+        img.paste(ehl_logo, (IMG_WIDTH - 20 - ehl_logo.width, 15), ehl_logo)
 
     title_text = "POWER RANKINGS"
     bbox = draw.textbbox((0, 0), title_text, font=font_title)
     tw = bbox[2] - bbox[0]
-    draw.text(((IMG_WIDTH - tw) // 2, 30), title_text, fill=TITLE_COLOR, font=font_title)
+    draw.text(((IMG_WIDTH - tw) // 2, 20), title_text, fill=TITLE_COLOR, font=font_title)
 
     sub_text = f"{division_label} {week_label}"
     bbox = draw.textbbox((0, 0), sub_text, font=font_subtitle)
     sw = bbox[2] - bbox[0]
-    draw.text(((IMG_WIDTH - sw) // 2, 105), sub_text, fill=SUBTITLE_COLOR, font=font_subtitle)
+    draw.text(((IMG_WIDTH - sw) // 2, 130), sub_text, fill=SUBTITLE_COLOR, font=font_subtitle)
 
     # ── Team rows ───────────────────────────────────────────
     y_start = HEADER_HEIGHT + TOP_PADDING
@@ -137,12 +142,19 @@ def generate_rankings_image(
         rank = idx + 1
         y = y_start + idx * ROW_HEIGHT
 
-        style = get_team_style(team.name)
+        style = get_team_style(team.name, logo_dir=logo_dir)
+
+        # Apply user-specified hex color override if provided
+        if team.name in color_overrides:
+            rgb = hex_to_rgb(color_overrides[team.name])
+            if rgb:
+                style = dict(style)  # copy to avoid mutating config
+                style["bar_color"] = rgb
 
         # Rank box (red rounded rectangle)
         rank_x0, rank_y0 = 10, y + 4
         rank_x1, rank_y1 = RANK_BOX_W, y + ROW_HEIGHT - 4
-        _draw_rounded_rect(draw, (rank_x0, rank_y0, rank_x1, rank_y1), 10, RANK_BG)
+        _draw_rounded_rect(draw, (rank_x0, rank_y0, rank_x1, rank_y1), 12, RANK_BG)
         rank_str = str(rank)
         rb = draw.textbbox((0, 0), rank_str, font=font_rank)
         rw = rb[2] - rb[0]
@@ -157,7 +169,7 @@ def generate_rankings_image(
         # Team bar (colored rounded rectangle)
         bar_x0, bar_y0 = BAR_LEFT, y + 4
         bar_x1, bar_y1 = BAR_RIGHT, y + ROW_HEIGHT - 4
-        _draw_rounded_rect(draw, (bar_x0, bar_y0, bar_x1, bar_y1), 10, style["bar_color"])
+        _draw_rounded_rect(draw, (bar_x0, bar_y0, bar_x1, bar_y1), 12, style["bar_color"])
 
         # Team name text – centered in bar (between left edge and logo area)
         name_upper = team.name.upper()
@@ -178,7 +190,7 @@ def generate_rankings_image(
             img.paste(logo_img, (logo_x, logo_y), logo_img)
 
         # Movement indicator (dash for now — could be ▲ ▼ later)
-        draw.text((MOVEMENT_X, y + 28), "–", fill=MOVEMENT_COLOR, font=font_move)
+        draw.text((MOVEMENT_X, y + 32), "–", fill=MOVEMENT_COLOR, font=font_move)
 
     img.save(output_path, "PNG")
     return output_path

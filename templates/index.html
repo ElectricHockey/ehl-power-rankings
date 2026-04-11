@@ -32,7 +32,7 @@
       border-radius: 12px;
       padding: 32px;
       margin: 30px 20px;
-      max-width: 560px;
+      max-width: 600px;
       width: 100%;
     }
     label {
@@ -65,8 +65,7 @@
       color: #eee;
       font-size: 1rem;
     }
-    button {
-      width: 100%;
+    button, .btn-add {
       padding: 14px;
       font-size: 1.1rem;
       font-weight: 700;
@@ -79,7 +78,8 @@
       letter-spacing: 1px;
       transition: background .2s;
     }
-    button:hover { background: #e6c200; }
+    button:hover, .btn-add:hover { background: #e6c200; }
+    button[type="submit"] { width: 100%; }
     .flash {
       background: #5a1a1a;
       border: 1px solid #a33;
@@ -94,6 +94,63 @@
       padding: 20px;
       color: #555;
       font-size: .85rem;
+    }
+    /* Team color overrides section */
+    .color-section {
+      margin-bottom: 18px;
+    }
+    .color-section h3 {
+      color: #ffd700;
+      font-size: 1rem;
+      margin-bottom: 10px;
+    }
+    .color-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .color-row input[type="text"] {
+      flex: 1;
+      padding: 9px 10px;
+      background: #222;
+      border: 1px solid #444;
+      border-radius: 6px;
+      color: #eee;
+      font-size: .95rem;
+    }
+    .color-row input[type="color"] {
+      width: 44px;
+      height: 38px;
+      border: 1px solid #444;
+      border-radius: 6px;
+      background: #222;
+      cursor: pointer;
+      padding: 2px;
+    }
+    .color-row .btn-remove {
+      background: #a33;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: .9rem;
+      cursor: pointer;
+      font-weight: 700;
+    }
+    .color-row .btn-remove:hover { background: #c44; }
+    .btn-add {
+      padding: 8px 16px;
+      font-size: .9rem;
+      background: #333;
+      color: #ffd700;
+      border: 1px solid #555;
+    }
+    .btn-add:hover { background: #444; color: #ffd700; }
+    .color-hint {
+      color: #777;
+      font-size: .8rem;
+      margin-top: 4px;
     }
   </style>
 </head>
@@ -127,10 +184,31 @@
         </div>
       </div>
 
+      <div class="color-section">
+        <h3>🎨 Team Bar Colors (optional)</h3>
+        <p class="color-hint">Set a custom bar color for any team. Team name must match the CSV exactly.</p>
+        <div id="color-rows"></div>
+        <button type="button" class="btn-add" onclick="addColorRow()">+ Add Team Color</button>
+      </div>
+
       <button type="submit">Generate Rankings</button>
     </form>
   </div>
 
   <footer>EHL Power Rankings Generator</footer>
+
+  <script>
+    function addColorRow(name, color) {
+      const container = document.getElementById('color-rows');
+      const row = document.createElement('div');
+      row.className = 'color-row';
+      row.innerHTML = `
+        <input type="text" name="team_name[]" placeholder="Team Name" value="${name || ''}">
+        <input type="color" name="team_color[]" value="${color || '#cc3333'}">
+        <button type="button" class="btn-remove" onclick="this.parentElement.remove()">✕</button>
+      `;
+      container.appendChild(row);
+    }
+  </script>
 </body>
 </html>

@@ -4,6 +4,23 @@
 # Add new teams here as needed.
 # ============================================================
 
+import os
+import re
+
+
+def hex_to_rgb(hex_str):
+    """Convert a hex color string like '#FF0000' or 'FF0000' to an (R, G, B) tuple.
+    Returns None if the string is not a valid hex color."""
+    if not hex_str:
+        return None
+    hex_str = hex_str.strip().lstrip("#")
+    if len(hex_str) != 6:
+        return None
+    try:
+        return (int(hex_str[0:2], 16), int(hex_str[2:4], 16), int(hex_str[4:6], 16))
+    except ValueError:
+        return None
+
 TEAM_CONFIG = {
     "Cape Cod Rangers": {
         "bar_color": (34, 80, 30),       # Dark green
@@ -91,17 +108,54 @@ _AUTO_COLORS = [
 _auto_color_map = {}
 
 
-def get_team_style(team_name):
-    """Return the style dict for a team, auto-assigning a unique color
-    to teams not listed in TEAM_CONFIG."""
-    if team_name in TEAM_CONFIG:
-        return TEAM_CONFIG[team_name]
+# Build a case-insensitive lookup for TEAM_CONFIG
+_TEAM_CONFIG_LOWER = {k.lower(): k for k in TEAM_CONFIG}
 
+
+def _auto_detect_logo(team_name, logo_dir):
+    """Try to find a logo file matching the team name by converting to
+    a filename pattern: 'Cape Cod Rangers' → 'cape_cod_rangers.png'."""
+    if not logo_dir:
+        return None
+    slug = re.sub(r"[^a-z0-9]+", "_", team_name.lower()).strip("_")
+    candidate = slug + ".png"
+    path = os.path.join(logo_dir, candidate)
+    if os.path.isfile(path):
+        return candidate
+    return None
+
+
+def get_team_style(team_name, logo_dir=None):
+    """Return the style dict for a team, using case-insensitive matching.
+    Auto-assigns a unique color to teams not listed in TEAM_CONFIG.
+    If logo_dir is provided, attempts auto-detection of logo files."""
+    # Exact match first
+    if team_name in TEAM_CONFIG:
+        style = TEAM_CONFIG[team_name]
+        # If logo is set but logo_dir provided, verify the file exists
+        if logo_dir and style.get("logo"):
+            path = os.path.join(logo_dir, style["logo"])
+            if not os.path.isfile(path):
+                # Try auto-detect as fallback
+                detected = _auto_detect_logo(team_name, logo_dir)
+                if detected:
+                    style = dict(style)
+                    style["logo"] = detected
+        return style
+
+    # Case-insensitive match
+    lower_name = team_name.lower()
+    if lower_name in _TEAM_CONFIG_LOWER:
+        canonical = _TEAM_CONFIG_LOWER[lower_name]
+        return TEAM_CONFIG[canonical]
+
+    # Unknown team — auto-assign color and try to find logo
     if team_name not in _auto_color_map:
         idx = len(_auto_color_map) % len(_AUTO_COLORS)
+        logo = _auto_detect_logo(team_name, logo_dir) if logo_dir else None
         _auto_color_map[team_name] = {
             "bar_color": _AUTO_COLORS[idx],
             "text_color": (255, 255, 255),
-            "logo": None,
+            "logo": logo,
         }
     return _auto_color_map[team_name]

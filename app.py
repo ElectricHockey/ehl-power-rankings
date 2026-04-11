@@ -8,6 +8,8 @@ import os
 import importlib
 import importlib.util
 import importlib.machinery
+import json
+import re
 import tempfile
 import uuid
 
@@ -59,6 +61,19 @@ def generate():
     week_label = request.form.get("week_label", "WEEK 1").strip() or "WEEK 1"
     div_label = request.form.get("div_label", "3'S").strip() or "3'S"
 
+    # ── Collect team color overrides ────────────────────────
+    color_overrides = {}
+    team_names = request.form.getlist("team_name[]")
+    team_colors = request.form.getlist("team_color[]")
+    for name, color in zip(team_names, team_colors):
+        name = name.strip()
+        color = color.strip()
+        if name and color:
+            # Ensure color is a valid hex string
+            hex_val = color.lstrip("#")
+            if re.match(r'^[0-9a-fA-F]{6}$', hex_val):
+                color_overrides[name] = f"#{hex_val}"
+
     # ── Save uploaded CSV ───────────────────────────────────
     csv_filename = f"{uuid.uuid4().hex}.csv"
     csv_path = os.path.join(UPLOAD_DIR, csv_filename)
@@ -108,6 +123,7 @@ def generate():
         logo_dir=LOGO_DIR,
         output_path=out_path,
         top_n=10,
+        color_overrides=color_overrides,
     )
 
     # ── Build results table with ALL ranked teams ───────────

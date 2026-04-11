@@ -133,7 +133,7 @@ def parse_schedule(csv_text):
         if not re.match(r'^\d+', game_num_time):
             continue
 
-        # CSV columns: 0=game#, 1=home, 2=home_score, 3=empty/OT,
+        # CSV columns: 0=game#, 1=home, 2=home_score, 3=OT marker (or empty),
         #              4=away_score, 5=away, 6=empty, 7=status
         home_name   = row[1].strip()
         away_name   = row[5].strip() if len(row) > 5 else ''

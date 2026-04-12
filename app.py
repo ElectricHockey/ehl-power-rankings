@@ -16,7 +16,7 @@ import uuid
 from flask import Flask, render_template, request, send_file, redirect, url_for, flash, session
 
 from generate_image import generate_rankings_image
-from team_config import get_team_style
+from team_config import get_team_style, hex_to_rgb
 
 # ── Import the ranking engine from the file named "power rankings" ──
 _engine_path = os.path.join(os.path.dirname(__file__), "power rankings")
@@ -151,7 +151,6 @@ def generate():
         # Get current bar color for the color picker
         style = get_team_style(team.name, logo_dir=LOGO_DIR)
         if team.name in color_overrides:
-            from team_config import hex_to_rgb
             rgb = hex_to_rgb(color_overrides[team.name])
             if rgb:
                 bar_color = color_overrides[team.name]
@@ -271,7 +270,6 @@ def regenerate():
         })
         style = get_team_style(team.name, logo_dir=LOGO_DIR)
         if team.name in color_overrides:
-            from team_config import hex_to_rgb
             rgb = hex_to_rgb(color_overrides[team.name])
             if rgb:
                 bar_color = color_overrides[team.name]

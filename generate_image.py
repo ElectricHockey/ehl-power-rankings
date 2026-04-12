@@ -158,17 +158,19 @@ def generate_rankings_image(
     bbox = draw.textbbox((0, 0), title_text, font=font_title)
     tw = bbox[2] - bbox[0]
     th = bbox[3] - bbox[1]
-    # Center the title in the top portion of the header
-    title_y = (HEADER_HEIGHT // 2 - th) // 2
-    draw.text(((IMG_WIDTH - tw) // 2, title_y), title_text, fill=TITLE_COLOR, font=font_title)
+    # Center the title in the top portion of the header (account for bbox origin)
+    title_x = (IMG_WIDTH - tw) // 2 - bbox[0]
+    title_y = (HEADER_HEIGHT // 2 - th) // 2 - bbox[1]
+    draw.text((title_x, title_y), title_text, fill=TITLE_COLOR, font=font_title)
 
     sub_text = f"{division_label} {week_label}"
     bbox = draw.textbbox((0, 0), sub_text, font=font_subtitle)
     sw = bbox[2] - bbox[0]
     sh = bbox[3] - bbox[1]
-    # Center the subtitle in the bottom portion of the header
-    sub_y = HEADER_HEIGHT // 2 + (HEADER_HEIGHT // 2 - sh) // 2
-    draw.text(((IMG_WIDTH - sw) // 2, sub_y), sub_text, fill=SUBTITLE_COLOR, font=font_subtitle)
+    # Center the subtitle in the bottom portion of the header (account for bbox origin)
+    sub_x = (IMG_WIDTH - sw) // 2 - bbox[0]
+    sub_y = HEADER_HEIGHT // 2 + (HEADER_HEIGHT // 2 - sh) // 2 - bbox[1]
+    draw.text((sub_x, sub_y), sub_text, fill=SUBTITLE_COLOR, font=font_subtitle)
 
     # ── Team rows ───────────────────────────────────────────
     y_start = HEADER_HEIGHT + TOP_PADDING
@@ -196,7 +198,8 @@ def generate_rankings_image(
         rw = rb[2] - rb[0]
         rh = rb[3] - rb[1]
         draw.text(
-            (rank_x0 + (box_w - rw) // 2, rank_y0 + (box_h - rh) // 2),
+            (rank_x0 + (box_w - rw) // 2 - rb[0],
+             rank_y0 + (box_h - rh) // 2 - rb[1]),
             rank_str,
             fill=RANK_TEXT_COLOR,
             font=font_rank,
@@ -236,14 +239,19 @@ def generate_rankings_image(
                 nw = nb[2] - nb[0]
                 nh = nb[3] - nb[1]
 
-        text_x = text_left + (text_area_w - nw) // 2
-        text_y = bar_y0 + (bar_h - nh) // 2
+        text_x = text_left + (text_area_w - nw) // 2 - nb[0]
+        text_y = bar_y0 + (bar_h - nh) // 2 - nb[1]
         draw.text((text_x, text_y), name_upper, fill=style["text_color"], font=actual_font)
 
         # Movement indicator (dash for now — could be ▲ ▼ later)
-        mb = draw.textbbox((0, 0), "–", font=font_move)
+        move_text = "–"
+        mb = draw.textbbox((0, 0), move_text, font=font_move)
+        mw = mb[2] - mb[0]
         mh = mb[3] - mb[1]
-        draw.text((MOVEMENT_X, y + (ROW_HEIGHT - mh) // 2), "–", fill=MOVEMENT_COLOR, font=font_move)
+        # Center in the right margin area (BAR_RIGHT to IMG_WIDTH)
+        margin_center_x = BAR_RIGHT + (IMG_WIDTH - BAR_RIGHT - mw) // 2 - mb[0]
+        margin_center_y = y + (ROW_HEIGHT - mh) // 2 - mb[1]
+        draw.text((margin_center_x, margin_center_y), move_text, fill=MOVEMENT_COLOR, font=font_move)
 
     img.save(output_path, "PNG")
     return output_path

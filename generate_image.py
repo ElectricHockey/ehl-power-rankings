@@ -79,6 +79,15 @@ def _draw_rounded_rect(draw, xy, radius, fill):
     draw.rounded_rectangle(xy, radius=r, fill=fill)
 
 
+# Default font sizes – can be overridden via font_overrides parameter
+DEFAULT_FONT_SIZES = {
+    "title": 84,
+    "subtitle": 52,
+    "team": 48,
+    "rank": 54,
+}
+
+
 def generate_rankings_image(
     ranked_teams,
     week_label="WEEK 1",
@@ -87,6 +96,7 @@ def generate_rankings_image(
     output_path="power_rankings.png",
     top_n=10,
     color_overrides=None,
+    font_overrides=None,
 ):
     """
     Generate the power rankings image.
@@ -107,9 +117,22 @@ def generate_rankings_image(
         How many teams to show in the image (default 10).
     color_overrides : dict or None
         Optional {team_name: "#RRGGBB"} to override bar colors.
+    font_overrides : dict or None
+        Optional {"title": int, "subtitle": int, "team": int, "rank": int}
+        to override default font sizes (in pt).
     """
     if color_overrides is None:
         color_overrides = {}
+
+    # Merge user font sizes with defaults
+    font_sizes = dict(DEFAULT_FONT_SIZES)
+    if font_overrides:
+        for key in DEFAULT_FONT_SIZES:
+            if key in font_overrides:
+                val = font_overrides[key]
+                if isinstance(val, int) and 10 <= val <= 200:
+                    font_sizes[key] = val
+
     teams_to_show = ranked_teams[:top_n]
     num_rows = len(teams_to_show)
     img_height = HEADER_HEIGHT + TOP_PADDING + num_rows * ROW_HEIGHT + BOTTOM_PADDING
@@ -118,27 +141,34 @@ def generate_rankings_image(
     draw = ImageDraw.Draw(img)
 
     # ── Fonts ───────────────────────────────────────────────
-    font_title = _load_font("Lato-Black.ttf", 120)
-    font_subtitle = _load_font("Lato-BoldItalic.ttf", 64)
-    font_rank = _load_font("Lato-Black.ttf", 68)
-    font_team = _load_font("Lato-Heavy.ttf", 64)
-    font_move = _load_font("Lato-Bold.ttf", 38)
+    font_title = _load_font("Lato-Black.ttf", font_sizes["title"])
+    font_subtitle = _load_font("Lato-BoldItalic.ttf", font_sizes["subtitle"])
+    font_rank = _load_font("Lato-Black.ttf", font_sizes["rank"])
+    font_team = _load_font("Lato-Heavy.ttf", font_sizes["team"])
+    font_move = _load_font("Lato-Bold.ttf", 32)
 
     # ── Header ──────────────────────────────────────────────
-    ehl_logo = _load_ehl_logo(logo_dir, 140)
+    ehl_logo = _load_ehl_logo(logo_dir, 130)
     if ehl_logo:
-        img.paste(ehl_logo, (20, 15), ehl_logo)
-        img.paste(ehl_logo, (IMG_WIDTH - 20 - ehl_logo.width, 15), ehl_logo)
+        logo_y_center = (HEADER_HEIGHT - ehl_logo.height) // 2
+        img.paste(ehl_logo, (20, logo_y_center), ehl_logo)
+        img.paste(ehl_logo, (IMG_WIDTH - 20 - ehl_logo.width, logo_y_center), ehl_logo)
 
     title_text = "POWER RANKINGS"
     bbox = draw.textbbox((0, 0), title_text, font=font_title)
     tw = bbox[2] - bbox[0]
-    draw.text(((IMG_WIDTH - tw) // 2, 15), title_text, fill=TITLE_COLOR, font=font_title)
+    th = bbox[3] - bbox[1]
+    # Center the title in the top portion of the header
+    title_y = (HEADER_HEIGHT // 2 - th) // 2
+    draw.text(((IMG_WIDTH - tw) // 2, title_y), title_text, fill=TITLE_COLOR, font=font_title)
 
     sub_text = f"{division_label} {week_label}"
     bbox = draw.textbbox((0, 0), sub_text, font=font_subtitle)
     sw = bbox[2] - bbox[0]
-    draw.text(((IMG_WIDTH - sw) // 2, 150), sub_text, fill=SUBTITLE_COLOR, font=font_subtitle)
+    sh = bbox[3] - bbox[1]
+    # Center the subtitle in the bottom portion of the header
+    sub_y = HEADER_HEIGHT // 2 + (HEADER_HEIGHT // 2 - sh) // 2
+    draw.text(((IMG_WIDTH - sw) // 2, sub_y), sub_text, fill=SUBTITLE_COLOR, font=font_subtitle)
 
     # ── Team rows ───────────────────────────────────────────
     y_start = HEADER_HEIGHT + TOP_PADDING
@@ -158,13 +188,15 @@ def generate_rankings_image(
         # Rank box (red rounded rectangle)
         rank_x0, rank_y0 = 10, y + 5
         rank_x1, rank_y1 = RANK_BOX_W, y + ROW_HEIGHT - 5
+        box_h = rank_y1 - rank_y0
+        box_w = rank_x1 - rank_x0
         _draw_rounded_rect(draw, (rank_x0, rank_y0, rank_x1, rank_y1), 14, RANK_BG)
         rank_str = str(rank)
         rb = draw.textbbox((0, 0), rank_str, font=font_rank)
         rw = rb[2] - rb[0]
         rh = rb[3] - rb[1]
         draw.text(
-            (rank_x0 + (RANK_BOX_W - 10 - rw) // 2, rank_y0 + (rank_y1 - rank_y0 - rh) // 2 - 2),
+            (rank_x0 + (box_w - rw) // 2, rank_y0 + (box_h - rh) // 2),
             rank_str,
             fill=RANK_TEXT_COLOR,
             font=font_rank,
@@ -173,28 +205,45 @@ def generate_rankings_image(
         # Team bar (colored rounded rectangle)
         bar_x0, bar_y0 = BAR_LEFT, y + 5
         bar_x1, bar_y1 = BAR_RIGHT, y + ROW_HEIGHT - 5
+        bar_h = bar_y1 - bar_y0
         _draw_rounded_rect(draw, (bar_x0, bar_y0, bar_x1, bar_y1), 14, style["bar_color"])
 
-        # Team name text – centered in bar (between left edge and logo area)
-        name_upper = team.name.upper()
-        nb = draw.textbbox((0, 0), name_upper, font=font_team)
-        nw = nb[2] - nb[0]
-        nh = nb[3] - nb[1]
-        logo_reserved = LOGO_SIZE + 24  # space reserved for logo on right
-        text_area_w = (bar_x1 - logo_reserved) - bar_x0
-        text_x = bar_x0 + (text_area_w - nw) // 2
-        text_y = bar_y0 + (bar_y1 - bar_y0 - nh) // 2 - 2
-        draw.text((text_x, text_y), name_upper, fill=style["text_color"], font=font_team)
-
-        # Team logo
+        # Team logo (drawn first so we know the exact reserved space)
         logo_img = _load_team_logo(logo_dir, style.get("logo"), LOGO_SIZE)
+        logo_x = bar_x1 - LOGO_SIZE - 10
         if logo_img:
-            logo_x = bar_x1 - LOGO_SIZE - 12
-            logo_y = bar_y0 + (bar_y1 - bar_y0 - LOGO_SIZE) // 2
+            logo_y = bar_y0 + (bar_h - LOGO_SIZE) // 2
             img.paste(logo_img, (logo_x, logo_y), logo_img)
 
+        # Team name text – must fit between bar left edge and logo area
+        name_upper = team.name.upper()
+        text_left = bar_x0 + 12
+        text_right = logo_x - 8  # leave gap before logo
+        text_area_w = text_right - text_left
+
+        # Use the requested font, but auto-shrink if the name is too wide
+        actual_font = font_team
+        nb = draw.textbbox((0, 0), name_upper, font=actual_font)
+        nw = nb[2] - nb[0]
+        nh = nb[3] - nb[1]
+        if nw > text_area_w:
+            # Shrink font until text fits
+            shrunk_size = font_sizes["team"]
+            while nw > text_area_w and shrunk_size > 16:
+                shrunk_size -= 2
+                actual_font = _load_font("Lato-Heavy.ttf", shrunk_size)
+                nb = draw.textbbox((0, 0), name_upper, font=actual_font)
+                nw = nb[2] - nb[0]
+                nh = nb[3] - nb[1]
+
+        text_x = text_left + (text_area_w - nw) // 2
+        text_y = bar_y0 + (bar_h - nh) // 2
+        draw.text((text_x, text_y), name_upper, fill=style["text_color"], font=actual_font)
+
         # Movement indicator (dash for now — could be ▲ ▼ later)
-        draw.text((MOVEMENT_X, y + 38), "–", fill=MOVEMENT_COLOR, font=font_move)
+        mb = draw.textbbox((0, 0), "–", font=font_move)
+        mh = mb[3] - mb[1]
+        draw.text((MOVEMENT_X, y + (ROW_HEIGHT - mh) // 2), "–", fill=MOVEMENT_COLOR, font=font_move)
 
     img.save(output_path, "PNG")
     return output_path

@@ -15,7 +15,7 @@ import uuid
 
 from flask import Flask, render_template, request, send_file, redirect, url_for, flash, session
 
-from generate_image import generate_rankings_image
+from generate_image import generate_rankings_image, DEFAULT_FONT_SIZES
 from team_config import get_team_style, hex_to_rgb
 
 # ── Import the ranking engine from the file named "power rankings" ──
@@ -36,6 +36,21 @@ LOGO_DIR = os.path.join(os.path.dirname(__file__), "logos")
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+
+def _collect_font_overrides(form):
+    """Extract font size overrides from form data, validating each value."""
+    overrides = {}
+    for key in DEFAULT_FONT_SIZES:
+        raw = form.get(f"font_{key}")
+        if raw:
+            try:
+                val = int(raw)
+                if 10 <= val <= 200:
+                    overrides[key] = val
+            except (ValueError, TypeError):
+                pass
+    return overrides
 
 
 @app.route("/", methods=["GET"])
@@ -61,6 +76,9 @@ def generate():
 
     week_label = request.form.get("week_label", "WEEK 1").strip() or "WEEK 1"
     div_label = request.form.get("div_label", "3'S").strip() or "3'S"
+
+    # ── Collect font size overrides ─────────────────────────
+    font_overrides = _collect_font_overrides(request.form)
 
     # ── Collect team color overrides ────────────────────────
     color_overrides = {}
@@ -122,6 +140,10 @@ def generate():
     out_filename = f"power_rankings_{uuid.uuid4().hex}.png"
     out_path = os.path.join(OUTPUT_DIR, out_filename)
 
+    # Merge font overrides with defaults for the actual sizes used
+    active_font_sizes = dict(DEFAULT_FONT_SIZES)
+    active_font_sizes.update(font_overrides)
+
     generate_rankings_image(
         rankings,
         week_label=week_label,
@@ -130,6 +152,7 @@ def generate():
         output_path=out_path,
         top_n=10,
         color_overrides=color_overrides,
+        font_overrides=font_overrides,
     )
 
     # ── Build results table with ALL ranked teams ───────────
@@ -171,6 +194,7 @@ def generate():
         div_label=div_label,
         total_ranked=len(rankings),
         team_colors=team_colors,
+        font_sizes=active_font_sizes,
     )
 
 
@@ -224,6 +248,9 @@ def regenerate():
             if re.match(r'^[0-9a-fA-F]{6}$', hex_val):
                 color_overrides[name] = f"#{hex_val}"
 
+    # ── Collect font size overrides ─────────────────────────
+    font_overrides = _collect_font_overrides(request.form)
+
     # ── Re-run the rankings engine ──────────────────────────
     try:
         with open(csv_path, "r", encoding="utf-8") as f:
@@ -242,6 +269,9 @@ def regenerate():
     out_filename = f"power_rankings_{uuid.uuid4().hex}.png"
     out_path = os.path.join(OUTPUT_DIR, out_filename)
 
+    active_font_sizes = dict(DEFAULT_FONT_SIZES)
+    active_font_sizes.update(font_overrides)
+
     generate_rankings_image(
         rankings,
         week_label=week_label,
@@ -250,6 +280,7 @@ def regenerate():
         output_path=out_path,
         top_n=10,
         color_overrides=color_overrides,
+        font_overrides=font_overrides,
     )
 
     # ── Build results + team colors ─────────────────────────
@@ -290,6 +321,7 @@ def regenerate():
         div_label=div_label,
         total_ranked=len(rankings),
         team_colors=team_colors,
+        font_sizes=active_font_sizes,
     )
 
 

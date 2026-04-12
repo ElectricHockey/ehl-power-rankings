@@ -148,6 +148,9 @@ def generate_rankings_image(
     font_move = _load_font("Lato-Bold.ttf", 32)
 
     # ── Header ──────────────────────────────────────────────
+    # NOTE: PIL textbbox((0,0), text) returns (x0, y0, x1, y1) where y0 is
+    # a positive offset (font ascent above baseline). To truly center text
+    # we must subtract these origin offsets from the draw position.
     ehl_logo = _load_ehl_logo(logo_dir, 130)
     if ehl_logo:
         logo_y_center = (HEADER_HEIGHT - ehl_logo.height) // 2

@@ -13,14 +13,14 @@ from team_config import get_team_style, hex_to_rgb
 
 # ── Layout constants ────────────────────────────────────────
 IMG_WIDTH = 1080
-ROW_HEIGHT = 104
-HEADER_HEIGHT = 210
+ROW_HEIGHT = 120
+HEADER_HEIGHT = 240
 TOP_PADDING = 10
 BOTTOM_PADDING = 20
-RANK_BOX_W = 90
+RANK_BOX_W = 100
 BAR_LEFT = RANK_BOX_W + 6
 BAR_RIGHT = IMG_WIDTH - 60
-LOGO_SIZE = 82
+LOGO_SIZE = 90
 MOVEMENT_X = IMG_WIDTH - 35
 
 BG_COLOR = (0, 0, 0)
@@ -32,10 +32,14 @@ MOVEMENT_COLOR = (255, 255, 255)
 
 FONT_DIR = "/usr/share/fonts/truetype"
 
+# Bundled fonts directory (shipped with the repo so fonts always work)
+_BUNDLED_FONT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts")
+
 
 def _load_font(name, size):
-    """Try several common paths to find a usable font."""
+    """Load a font, checking the bundled fonts/ dir first, then system paths."""
     candidates = [
+        os.path.join(_BUNDLED_FONT_DIR, name),
         os.path.join(FONT_DIR, "lato", name),
         os.path.join(FONT_DIR, "dejavu", name),
         os.path.join(FONT_DIR, "liberation", name),
@@ -114,14 +118,14 @@ def generate_rankings_image(
     draw = ImageDraw.Draw(img)
 
     # ── Fonts ───────────────────────────────────────────────
-    font_title = _load_font("Lato-Black.ttf", 96)
-    font_subtitle = _load_font("Lato-BoldItalic.ttf", 56)
-    font_rank = _load_font("Lato-Black.ttf", 60)
-    font_team = _load_font("Lato-Heavy.ttf", 56)
-    font_move = _load_font("Lato-Bold.ttf", 36)
+    font_title = _load_font("Lato-Black.ttf", 120)
+    font_subtitle = _load_font("Lato-BoldItalic.ttf", 64)
+    font_rank = _load_font("Lato-Black.ttf", 68)
+    font_team = _load_font("Lato-Heavy.ttf", 64)
+    font_move = _load_font("Lato-Bold.ttf", 38)
 
     # ── Header ──────────────────────────────────────────────
-    ehl_logo = _load_ehl_logo(logo_dir, 130)
+    ehl_logo = _load_ehl_logo(logo_dir, 140)
     if ehl_logo:
         img.paste(ehl_logo, (20, 15), ehl_logo)
         img.paste(ehl_logo, (IMG_WIDTH - 20 - ehl_logo.width, 15), ehl_logo)
@@ -129,12 +133,12 @@ def generate_rankings_image(
     title_text = "POWER RANKINGS"
     bbox = draw.textbbox((0, 0), title_text, font=font_title)
     tw = bbox[2] - bbox[0]
-    draw.text(((IMG_WIDTH - tw) // 2, 20), title_text, fill=TITLE_COLOR, font=font_title)
+    draw.text(((IMG_WIDTH - tw) // 2, 15), title_text, fill=TITLE_COLOR, font=font_title)
 
     sub_text = f"{division_label} {week_label}"
     bbox = draw.textbbox((0, 0), sub_text, font=font_subtitle)
     sw = bbox[2] - bbox[0]
-    draw.text(((IMG_WIDTH - sw) // 2, 130), sub_text, fill=SUBTITLE_COLOR, font=font_subtitle)
+    draw.text(((IMG_WIDTH - sw) // 2, 150), sub_text, fill=SUBTITLE_COLOR, font=font_subtitle)
 
     # ── Team rows ───────────────────────────────────────────
     y_start = HEADER_HEIGHT + TOP_PADDING
@@ -152,9 +156,9 @@ def generate_rankings_image(
                 style["bar_color"] = rgb
 
         # Rank box (red rounded rectangle)
-        rank_x0, rank_y0 = 10, y + 4
-        rank_x1, rank_y1 = RANK_BOX_W, y + ROW_HEIGHT - 4
-        _draw_rounded_rect(draw, (rank_x0, rank_y0, rank_x1, rank_y1), 12, RANK_BG)
+        rank_x0, rank_y0 = 10, y + 5
+        rank_x1, rank_y1 = RANK_BOX_W, y + ROW_HEIGHT - 5
+        _draw_rounded_rect(draw, (rank_x0, rank_y0, rank_x1, rank_y1), 14, RANK_BG)
         rank_str = str(rank)
         rb = draw.textbbox((0, 0), rank_str, font=font_rank)
         rw = rb[2] - rb[0]
@@ -167,9 +171,9 @@ def generate_rankings_image(
         )
 
         # Team bar (colored rounded rectangle)
-        bar_x0, bar_y0 = BAR_LEFT, y + 4
-        bar_x1, bar_y1 = BAR_RIGHT, y + ROW_HEIGHT - 4
-        _draw_rounded_rect(draw, (bar_x0, bar_y0, bar_x1, bar_y1), 12, style["bar_color"])
+        bar_x0, bar_y0 = BAR_LEFT, y + 5
+        bar_x1, bar_y1 = BAR_RIGHT, y + ROW_HEIGHT - 5
+        _draw_rounded_rect(draw, (bar_x0, bar_y0, bar_x1, bar_y1), 14, style["bar_color"])
 
         # Team name text – centered in bar (between left edge and logo area)
         name_upper = team.name.upper()
@@ -190,7 +194,7 @@ def generate_rankings_image(
             img.paste(logo_img, (logo_x, logo_y), logo_img)
 
         # Movement indicator (dash for now — could be ▲ ▼ later)
-        draw.text((MOVEMENT_X, y + 32), "–", fill=MOVEMENT_COLOR, font=font_move)
+        draw.text((MOVEMENT_X, y + 38), "–", fill=MOVEMENT_COLOR, font=font_move)
 
     img.save(output_path, "PNG")
     return output_path

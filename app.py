@@ -150,8 +150,9 @@ def generate():
         os.remove(saved_path)
 
     # ── Compute movement arrows ─────────────────────────────
-    week_num = _extract_week_number(week_label)
-    movement = engine.compute_movement(csv_text, week_num)
+    # Automatically detect how many weeks are in the schedule
+    total_weeks = engine.count_weeks(csv_text)
+    movement = engine.compute_movement(csv_text, total_weeks)
 
     # ── Generate image ──────────────────────────────────────
     out_filename = f"power_rankings_{uuid.uuid4().hex}.png"
@@ -282,8 +283,8 @@ def regenerate():
         return redirect(url_for("index"))
 
     # ── Compute movement arrows ─────────────────────────────
-    week_num = _extract_week_number(week_label)
-    movement = engine.compute_movement(csv_text, week_num)
+    total_weeks = engine.count_weeks(csv_text)
+    movement = engine.compute_movement(csv_text, total_weeks)
 
     # ── Generate new image ──────────────────────────────────
     out_filename = f"power_rankings_{uuid.uuid4().hex}.png"

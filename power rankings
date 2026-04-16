@@ -450,9 +450,16 @@ def xlsx_to_csv_text(xlsx_path):
     """Read the first sheet of an .xlsx file and return CSV text.
 
     Requires *openpyxl* (listed in requirements.txt).
+
+    Special handling:
+    - datetime cells are converted to "DayName MonthName Day" format
+      (e.g. ``Monday January 6``) so the week-detection regex works.
+    - All other non-string values are converted to their ``str()``
+      representation so the CSV parser sees text it can handle.
     """
     import openpyxl
     from io import StringIO
+    import datetime as _dt
 
     wb = openpyxl.load_workbook(xlsx_path, read_only=True, data_only=True)
     ws = wb.active
@@ -460,7 +467,18 @@ def xlsx_to_csv_text(xlsx_path):
     buf = StringIO()
     writer = csv.writer(buf)
     for row in ws.iter_rows(values_only=True):
-        writer.writerow([(c if c is not None else '') for c in row])
+        converted = []
+        for c in row:
+            if c is None:
+                converted.append('')
+            elif isinstance(c, _dt.datetime):
+                # "Monday January 6" — matches the date-header regex
+                converted.append(c.strftime("%A %B ") + str(c.day))
+            elif isinstance(c, _dt.date):
+                converted.append(c.strftime("%A %B ") + str(c.day))
+            else:
+                converted.append(str(c))
+        writer.writerow(converted)
     wb.close()
     return buf.getvalue()
 

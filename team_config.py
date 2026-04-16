@@ -115,15 +115,18 @@ _TEAM_CONFIG_LOWER = {k.lower(): k for k in TEAM_CONFIG}
 def _auto_detect_logo(team_name, logo_dir):
     """Try to find a logo file matching the team name by converting to
     a filename pattern: 'Cape Cod Rangers' → 'cape_cod_rangers.png'.
-    Also handles special characters like '&' by trying multiple slug forms."""
+    Also handles special characters like '&' by trying multiple slug forms
+    and scanning the logo directory for case-insensitive matches."""
     if not logo_dir:
         return None
+
     # Primary slug: strip all non-alphanumeric chars
     slug = re.sub(r"[^a-z0-9]+", "_", team_name.lower()).strip("_")
     candidate = slug + ".png"
     path = os.path.join(logo_dir, candidate)
     if os.path.isfile(path):
         return candidate
+
     # Secondary slug: replace '&' with 'and' before slugifying
     alt_name = team_name.replace("&", "and")
     alt_slug = re.sub(r"[^a-z0-9]+", "_", alt_name.lower()).strip("_")
@@ -131,6 +134,22 @@ def _auto_detect_logo(team_name, logo_dir):
         alt_candidate = alt_slug + ".png"
         if os.path.isfile(os.path.join(logo_dir, alt_candidate)):
             return alt_candidate
+
+    # Directory scan fallback: look for any .png whose slug-form matches
+    # This handles filenames like 'blood_sweat_&_beers.png' where the user
+    # kept the '&' in the filename.
+    try:
+        for fname in os.listdir(logo_dir):
+            if not fname.lower().endswith(".png"):
+                continue
+            # Slug the filename (minus extension) and compare to our slug
+            base = os.path.splitext(fname)[0]
+            file_slug = re.sub(r"[^a-z0-9]+", "_", base.lower()).strip("_")
+            if file_slug == slug:
+                return fname
+    except OSError:
+        pass
+
     return None
 
 

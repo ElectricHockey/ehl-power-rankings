@@ -161,9 +161,9 @@ def parse_schedule(csv_text):
             is_ot = True
 
         try:
-            home_score = int(home_score_raw)
-            away_score = int(away_score_raw)
-        except ValueError:
+            home_score = int(float(home_score_raw))
+            away_score = int(float(away_score_raw))
+        except (ValueError, OverflowError):
             continue
 
         # ---- FORFEIT HANDLING ----
@@ -374,18 +374,42 @@ def print_movement(season_rankings, weekly_rankings):
 # WEEK HELPERS
 # ============================================================
 
-# Regex that matches date-header rows like "Monday January 6" (with optional leading quote)
-_DATE_HEADER_RE = re.compile(r'^"?[A-Za-z]+ [A-Za-z]+ \d+')
+def _find_date_row_indices(csv_text):
+    """Find the line indices of date-header rows in the CSV text.
+
+    A date-header row is identified as a row whose first cell contains text
+    (not starting with a digit and not a known column-header keyword) while
+    most remaining cells are empty.  This is far more robust than a single
+    regex because date formats vary widely between .csv and .xlsx exports
+    (e.g. ``"Saturday, January 4, 2025"`` vs ``Monday January 6``).
+    """
+    lines = csv_text.strip().split('\n')
+    indices = []
+    for i, line in enumerate(lines):
+        try:
+            row = next(csv.reader([line]))
+        except (StopIteration, csv.Error):
+            continue
+        if not row or not row[0].strip():
+            continue
+        cell0 = row[0].strip()
+        # Game rows start with a digit (game number / time)
+        if re.match(r'^\d', cell0):
+            continue
+        # Column-header rows
+        lower0 = cell0.lower()
+        if lower0.startswith('date') or lower0.startswith('game') or lower0 == '#':
+            continue
+        # Date/section headers typically have content only in the first cell
+        non_empty_others = sum(1 for c in row[1:] if c and c.strip())
+        if non_empty_others <= 1:
+            indices.append(i)
+    return indices
 
 
 def count_weeks(csv_text):
     """Count the number of date-section (week) boundaries in the schedule."""
-    lines = csv_text.strip().split('\n')
-    count = 0
-    for line in lines:
-        if _DATE_HEADER_RE.match(line):
-            count += 1
-    return count
+    return len(_find_date_row_indices(csv_text))
 
 
 def schedule_up_to_week(csv_text, max_week):
@@ -396,10 +420,7 @@ def schedule_up_to_week(csv_text, max_week):
     If *max_week* >= total weeks, all games are included.
     """
     lines = csv_text.strip().split('\n')
-    date_indices = []
-    for i, line in enumerate(lines):
-        if _DATE_HEADER_RE.match(line):
-            date_indices.append(i)
+    date_indices = _find_date_row_indices(csv_text)
 
     if not date_indices or max_week < 1:
         return csv_text
@@ -480,6 +501,12 @@ def xlsx_to_csv_text(xlsx_path):
                 converted.append(c.strftime("%A %B ") + str(c.day))
             elif isinstance(c, _dt.date):
                 converted.append(c.strftime("%A %B ") + str(c.day))
+            elif isinstance(c, (int, float)):
+                # Excel often stores whole numbers as float; convert to int
+                if isinstance(c, float) and c == int(c):
+                    converted.append(str(int(c)))
+                else:
+                    converted.append(str(c))
             else:
                 converted.append(str(c))
         writer.writerow(converted)

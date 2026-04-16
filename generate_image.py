@@ -29,6 +29,8 @@ RANK_TEXT_COLOR = (255, 255, 255)
 TITLE_COLOR = (255, 215, 0)
 SUBTITLE_COLOR = (255, 215, 0)
 MOVEMENT_COLOR = (255, 255, 255)
+MOVE_UP_COLOR = (0, 200, 0)
+MOVE_DOWN_COLOR = (220, 30, 30)
 
 FONT_DIR = "/usr/share/fonts/truetype"
 
@@ -97,6 +99,7 @@ def generate_rankings_image(
     top_n=10,
     color_overrides=None,
     font_overrides=None,
+    movement=None,
 ):
     """
     Generate the power rankings image.
@@ -120,9 +123,14 @@ def generate_rankings_image(
     font_overrides : dict or None
         Optional {"title": int, "subtitle": int, "team": int, "rank": int}
         to override default font sizes (in pt).
+    movement : dict or None
+        Optional {team_name: int} where positive = moved up, negative = down,
+        0 = unchanged, None = new team.  Omit for no arrows.
     """
     if color_overrides is None:
         color_overrides = {}
+    if movement is None:
+        movement = {}
 
     # Merge user font sizes with defaults
     font_sizes = dict(DEFAULT_FONT_SIZES)
@@ -246,15 +254,24 @@ def generate_rankings_image(
         text_y = bar_y0 + (bar_h - nh) // 2 - nb[1]
         draw.text((text_x, text_y), name_upper, fill=style["text_color"], font=actual_font)
 
-        # Movement indicator (dash for now — could be ▲ ▼ later)
-        move_text = "–"
+        # Movement indicator (▲N / ▼N / –)
+        move_val = movement.get(team.name, 0)
+        if move_val is None or move_val == 0:
+            move_text = "–"
+            move_color = MOVEMENT_COLOR
+        elif move_val > 0:
+            move_text = f"▲{move_val}"
+            move_color = MOVE_UP_COLOR
+        else:
+            move_text = f"▼{abs(move_val)}"
+            move_color = MOVE_DOWN_COLOR
         mb = draw.textbbox((0, 0), move_text, font=font_move)
         mw = mb[2] - mb[0]
         mh = mb[3] - mb[1]
         # Center in the right margin area (BAR_RIGHT to IMG_WIDTH)
         margin_center_x = BAR_RIGHT + (IMG_WIDTH - BAR_RIGHT - mw) // 2 - mb[0]
         margin_center_y = y + (ROW_HEIGHT - mh) // 2 - mb[1]
-        draw.text((margin_center_x, margin_center_y), move_text, fill=MOVEMENT_COLOR, font=font_move)
+        draw.text((margin_center_x, margin_center_y), move_text, fill=move_color, font=font_move)
 
     img.save(output_path, "PNG")
     return output_path

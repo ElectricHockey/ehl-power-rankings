@@ -1,7 +1,7 @@
 """
 app.py – EHL Power Rankings Web App
-Upload a CSV schedule file, see the top-10 power rankings, and download
-a styled image ready for social media.
+Upload an Excel (.xlsx) schedule file, see the top-10 power rankings, and
+download a styled image ready for social media.
 """
 
 import os
@@ -53,6 +53,12 @@ def _collect_font_overrides(form):
     return overrides
 
 
+def _extract_week_number(week_label):
+    """Extract the numeric week from a label like 'WEEK 3'. Returns 0 if unparseable."""
+    m = re.search(r'(\d+)', week_label)
+    return int(m.group(1)) if m else 0
+
+
 @app.route("/", methods=["GET"])
 def index():
     return render_template("index.html")
@@ -61,17 +67,18 @@ def index():
 @app.route("/generate", methods=["POST"])
 def generate():
     # ── Validate upload ─────────────────────────────────────
-    if "csv_file" not in request.files:
+    if "schedule_file" not in request.files:
         flash("No file uploaded.", "error")
         return redirect(url_for("index"))
 
-    csv_file = request.files["csv_file"]
-    if csv_file.filename == "":
+    schedule_file = request.files["schedule_file"]
+    if schedule_file.filename == "":
         flash("No file selected.", "error")
         return redirect(url_for("index"))
 
-    if not csv_file.filename.lower().endswith(".csv"):
-        flash("Please upload a .csv file.", "error")
+    fname_lower = schedule_file.filename.lower()
+    if not (fname_lower.endswith(".xlsx") or fname_lower.endswith(".csv")):
+        flash("Please upload an .xlsx (or .csv) file.", "error")
         return redirect(url_for("index"))
 
     week_label = request.form.get("week_label", "WEEK 1").strip() or "WEEK 1"
@@ -93,15 +100,19 @@ def generate():
             if re.match(r'^[0-9a-fA-F]{6}$', hex_val):
                 color_overrides[name] = f"#{hex_val}"
 
-    # ── Save uploaded CSV ───────────────────────────────────
-    csv_filename = f"{uuid.uuid4().hex}.csv"
-    csv_path = os.path.join(UPLOAD_DIR, csv_filename)
-    csv_file.save(csv_path)
+    # ── Save uploaded file ──────────────────────────────────
+    ext = ".xlsx" if fname_lower.endswith(".xlsx") else ".csv"
+    saved_filename = f"{uuid.uuid4().hex}{ext}"
+    saved_path = os.path.join(UPLOAD_DIR, saved_filename)
+    schedule_file.save(saved_path)
 
-    # ── Run the rankings engine ─────────────────────────────
+    # ── Convert to CSV text ─────────────────────────────────
     try:
-        with open(csv_path, "r", encoding="utf-8") as f:
-            csv_text = f.read()
+        if ext == ".xlsx":
+            csv_text = engine.xlsx_to_csv_text(saved_path)
+        else:
+            with open(saved_path, "r", encoding="utf-8") as f:
+                csv_text = f.read()
 
         teams = engine.parse_schedule(csv_text)
         rankings = engine.calculate_power_scores(teams)
@@ -116,25 +127,31 @@ def generate():
                 )
             else:
                 flash(
-                    "No teams or games found in the CSV. "
+                    "No teams or games found in the file. "
                     "Expected columns: Game#, Home, HomeScore, AwayScore, Away, …, …, Status. "
                     "Rows must start with a number (game #).",
                     "error",
                 )
-            if os.path.exists(csv_path):
-                os.remove(csv_path)
+            if os.path.exists(saved_path):
+                os.remove(saved_path)
             return redirect(url_for("index"))
 
     except Exception as exc:
-        flash(f"Error processing CSV: {exc}", "error")
-        if os.path.exists(csv_path):
-            os.remove(csv_path)
+        flash(f"Error processing file: {exc}", "error")
+        if os.path.exists(saved_path):
+            os.remove(saved_path)
         return redirect(url_for("index"))
 
-    # Keep the CSV so the user can regenerate with different colors
-    session["csv_path"] = csv_path
+    # Store CSV text in session for regeneration; remove uploaded file
+    session["csv_text"] = csv_text
     session["week_label"] = week_label
     session["div_label"] = div_label
+    if os.path.exists(saved_path):
+        os.remove(saved_path)
+
+    # ── Compute movement arrows ─────────────────────────────
+    week_num = _extract_week_number(week_label)
+    movement = engine.compute_movement(csv_text, week_num)
 
     # ── Generate image ──────────────────────────────────────
     out_filename = f"power_rankings_{uuid.uuid4().hex}.png"
@@ -153,6 +170,7 @@ def generate():
         top_n=10,
         color_overrides=color_overrides,
         font_overrides=font_overrides,
+        movement=movement,
     )
 
     # ── Build results table with ALL ranked teams ───────────
@@ -227,13 +245,13 @@ def download(filename):
 
 @app.route("/regenerate", methods=["POST"])
 def regenerate():
-    """Re-generate the image using the previously uploaded CSV with new color overrides."""
-    csv_path = session.get("csv_path")
+    """Re-generate the image using the previously uploaded schedule with new overrides."""
+    csv_text = session.get("csv_text")
     week_label = session.get("week_label", "WEEK 1")
     div_label = session.get("div_label", "3'S")
 
-    if not csv_path or not os.path.isfile(csv_path):
-        flash("Session expired. Please upload the CSV again.", "error")
+    if not csv_text:
+        flash("Session expired. Please upload the schedule again.", "error")
         return redirect(url_for("index"))
 
     # ── Collect team color overrides ────────────────────────
@@ -253,17 +271,19 @@ def regenerate():
 
     # ── Re-run the rankings engine ──────────────────────────
     try:
-        with open(csv_path, "r", encoding="utf-8") as f:
-            csv_text = f.read()
         teams = engine.parse_schedule(csv_text)
         rankings = engine.calculate_power_scores(teams)
     except Exception as exc:
-        flash(f"Error processing CSV: {exc}", "error")
+        flash(f"Error processing schedule: {exc}", "error")
         return redirect(url_for("index"))
 
     if not rankings:
         flash("No ranked teams found.", "error")
         return redirect(url_for("index"))
+
+    # ── Compute movement arrows ─────────────────────────────
+    week_num = _extract_week_number(week_label)
+    movement = engine.compute_movement(csv_text, week_num)
 
     # ── Generate new image ──────────────────────────────────
     out_filename = f"power_rankings_{uuid.uuid4().hex}.png"
@@ -281,6 +301,7 @@ def regenerate():
         top_n=10,
         color_overrides=color_overrides,
         font_overrides=font_overrides,
+        movement=movement,
     )
 
     # ── Build results + team colors ─────────────────────────

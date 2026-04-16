@@ -371,6 +371,101 @@ def print_movement(season_rankings, weekly_rankings):
 
 
 # ============================================================
+# WEEK HELPERS
+# ============================================================
+
+def count_weeks(csv_text):
+    """Count the number of date-section (week) boundaries in the schedule."""
+    lines = csv_text.strip().split('\n')
+    count = 0
+    for line in lines:
+        if re.match(r'^"?[A-Za-z]+ [A-Za-z]+ \d+', line):
+            count += 1
+    return count
+
+
+def schedule_up_to_week(csv_text, max_week):
+    """Return CSV text containing only games from weeks 1 through *max_week*.
+
+    Each date-header row in the schedule is treated as the start of a new
+    week.  Week 1 = first date section, week 2 = first two sections, etc.
+    If *max_week* >= total weeks, all games are included.
+    """
+    lines = csv_text.strip().split('\n')
+    date_indices = []
+    for i, line in enumerate(lines):
+        if re.match(r'^"?[A-Za-z]+ [A-Za-z]+ \d+', line):
+            date_indices.append(i)
+
+    if not date_indices or max_week < 1:
+        return csv_text
+
+    max_week = min(max_week, len(date_indices))
+    if max_week < len(date_indices):
+        end_idx = date_indices[max_week]
+    else:
+        end_idx = len(lines)
+
+    return '\n'.join(lines[:end_idx])
+
+
+def compute_movement(csv_text, target_week):
+    """Compare rankings through *target_week* vs *target_week - 1*.
+
+    Returns a dict ``{team_name: int}`` where a positive value means
+    the team moved **up** (e.g. +2 = rose two spots) and negative means
+    they moved **down**.  Teams new this week get ``None``.
+    Returns an empty dict when there is no previous week.
+    """
+    if target_week <= 1:
+        return {}
+
+    current_csv = schedule_up_to_week(csv_text, target_week)
+    prev_csv = schedule_up_to_week(csv_text, target_week - 1)
+
+    current_teams = parse_schedule(current_csv)
+    current_rankings = calculate_power_scores(current_teams)
+
+    prev_teams = parse_schedule(prev_csv)
+    prev_rankings = calculate_power_scores(prev_teams)
+
+    prev_ranks = {t.name: i + 1 for i, (t, _, _) in enumerate(prev_rankings)}
+
+    movement = {}
+    for i, (team, _score, _bd) in enumerate(current_rankings):
+        curr_rank = i + 1
+        prev_rank = prev_ranks.get(team.name)
+        if prev_rank is not None:
+            movement[team.name] = prev_rank - curr_rank  # positive = moved up
+        else:
+            movement[team.name] = None  # brand-new team
+    return movement
+
+
+# ============================================================
+# XLSX HELPER
+# ============================================================
+
+def xlsx_to_csv_text(xlsx_path):
+    """Read the first sheet of an .xlsx file and return CSV text.
+
+    Requires *openpyxl* (listed in requirements.txt).
+    """
+    import openpyxl
+    from io import StringIO
+
+    wb = openpyxl.load_workbook(xlsx_path, read_only=True, data_only=True)
+    ws = wb.active
+
+    buf = StringIO()
+    writer = csv.writer(buf)
+    for row in ws.iter_rows(values_only=True):
+        writer.writerow([(c if c is not None else '') for c in row])
+    wb.close()
+    return buf.getvalue()
+
+
+# ============================================================
 # MAIN
 # ============================================================
 

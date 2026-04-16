@@ -114,14 +114,23 @@ _TEAM_CONFIG_LOWER = {k.lower(): k for k in TEAM_CONFIG}
 
 def _auto_detect_logo(team_name, logo_dir):
     """Try to find a logo file matching the team name by converting to
-    a filename pattern: 'Cape Cod Rangers' → 'cape_cod_rangers.png'."""
+    a filename pattern: 'Cape Cod Rangers' → 'cape_cod_rangers.png'.
+    Also handles special characters like '&' by trying multiple slug forms."""
     if not logo_dir:
         return None
+    # Primary slug: strip all non-alphanumeric chars
     slug = re.sub(r"[^a-z0-9]+", "_", team_name.lower()).strip("_")
     candidate = slug + ".png"
     path = os.path.join(logo_dir, candidate)
     if os.path.isfile(path):
         return candidate
+    # Secondary slug: replace '&' with 'and' before slugifying
+    alt_name = team_name.replace("&", "and")
+    alt_slug = re.sub(r"[^a-z0-9]+", "_", alt_name.lower()).strip("_")
+    if alt_slug != slug:
+        alt_candidate = alt_slug + ".png"
+        if os.path.isfile(os.path.join(logo_dir, alt_candidate)):
+            return alt_candidate
     return None
 
 

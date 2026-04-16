@@ -157,7 +157,7 @@
 <body>
   <header>
     <h1>🏒 EHL Power Rankings</h1>
-    <p>Upload your schedule (.xlsx) to generate this week's rankings image.</p>
+    <p>Upload your schedule (.xlsx or .csv) to generate this week's rankings image.</p>
   </header>
 
   <div class="card">
@@ -170,7 +170,7 @@
     {% endwith %}
 
     <form action="{{ url_for('generate') }}" method="post" enctype="multipart/form-data">
-      <label for="schedule_file">Schedule File (.xlsx)</label>
+      <label for="schedule_file">Schedule File (.xlsx or .csv)</label>
       <input type="file" id="schedule_file" name="schedule_file" accept=".xlsx,.csv" required>
 
       <div class="row">

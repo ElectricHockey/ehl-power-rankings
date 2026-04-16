@@ -254,24 +254,55 @@ def generate_rankings_image(
         text_y = bar_y0 + (bar_h - nh) // 2 - nb[1]
         draw.text((text_x, text_y), name_upper, fill=style["text_color"], font=actual_font)
 
-        # Movement indicator (▲N / ▼N / –)
+        # Movement indicator: drawn arrow + number, or "–" for no change
         move_val = movement.get(team.name, 0)
+        margin_cx = BAR_RIGHT + (IMG_WIDTH - BAR_RIGHT) // 2  # center x of margin
+        row_cy = y + ROW_HEIGHT // 2  # center y of this row
+
         if move_val is None or move_val == 0:
+            # No movement — draw a dash
             move_text = "–"
-            move_color = MOVEMENT_COLOR
-        elif move_val > 0:
-            move_text = f"▲{move_val}"
-            move_color = MOVE_UP_COLOR
+            mb = draw.textbbox((0, 0), move_text, font=font_move)
+            mw, mh = mb[2] - mb[0], mb[3] - mb[1]
+            draw.text(
+                (margin_cx - mw // 2 - mb[0], row_cy - mh // 2 - mb[1]),
+                move_text, fill=MOVEMENT_COLOR, font=font_move,
+            )
         else:
-            move_text = f"▼{abs(move_val)}"
-            move_color = MOVE_DOWN_COLOR
-        mb = draw.textbbox((0, 0), move_text, font=font_move)
-        mw = mb[2] - mb[0]
-        mh = mb[3] - mb[1]
-        # Center in the right margin area (BAR_RIGHT to IMG_WIDTH)
-        margin_center_x = BAR_RIGHT + (IMG_WIDTH - BAR_RIGHT - mw) // 2 - mb[0]
-        margin_center_y = y + (ROW_HEIGHT - mh) // 2 - mb[1]
-        draw.text((margin_center_x, margin_center_y), move_text, fill=move_color, font=font_move)
+            # Draw a polygon arrow (up or down) + the number
+            num_text = str(abs(move_val))
+            nb = draw.textbbox((0, 0), num_text, font=font_move)
+            nw, nh = nb[2] - nb[0], nb[3] - nb[1]
+
+            arrow_h = 14   # arrow triangle height
+            arrow_w = 16   # arrow triangle base width
+            gap = 2        # space between arrow and number
+            total_h = arrow_h + gap + nh
+            top_y = row_cy - total_h // 2
+
+            if move_val > 0:
+                # Green up arrow ▲
+                arrow_color = MOVE_UP_COLOR
+                arrow_tip = (margin_cx, top_y)
+                arrow_bl = (margin_cx - arrow_w // 2, top_y + arrow_h)
+                arrow_br = (margin_cx + arrow_w // 2, top_y + arrow_h)
+                draw.polygon([arrow_tip, arrow_bl, arrow_br], fill=arrow_color)
+                # Number below arrow
+                num_x = margin_cx - nw // 2 - nb[0]
+                num_y = top_y + arrow_h + gap - nb[1]
+                draw.text((num_x, num_y), num_text, fill=arrow_color, font=font_move)
+            else:
+                # Red down arrow ▼
+                arrow_color = MOVE_DOWN_COLOR
+                # Number on top, arrow below
+                num_x = margin_cx - nw // 2 - nb[0]
+                num_y = top_y - nb[1]
+                draw.text((num_x, num_y), num_text, fill=arrow_color, font=font_move)
+                arrow_top_y = top_y + nh + gap
+                arrow_tl = (margin_cx - arrow_w // 2, arrow_top_y)
+                arrow_tr = (margin_cx + arrow_w // 2, arrow_top_y)
+                arrow_tip = (margin_cx, arrow_top_y + arrow_h)
+                draw.polygon([arrow_tl, arrow_tr, arrow_tip], fill=arrow_color)
 
     img.save(output_path, "PNG")
     return output_path

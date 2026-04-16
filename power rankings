@@ -374,12 +374,16 @@ def print_movement(season_rankings, weekly_rankings):
 # WEEK HELPERS
 # ============================================================
 
+# Regex that matches date-header rows like "Monday January 6" (with optional leading quote)
+_DATE_HEADER_RE = re.compile(r'^"?[A-Za-z]+ [A-Za-z]+ \d+')
+
+
 def count_weeks(csv_text):
     """Count the number of date-section (week) boundaries in the schedule."""
     lines = csv_text.strip().split('\n')
     count = 0
     for line in lines:
-        if re.match(r'^"?[A-Za-z]+ [A-Za-z]+ \d+', line):
+        if _DATE_HEADER_RE.match(line):
             count += 1
     return count
 
@@ -394,7 +398,7 @@ def schedule_up_to_week(csv_text, max_week):
     lines = csv_text.strip().split('\n')
     date_indices = []
     for i, line in enumerate(lines):
-        if re.match(r'^"?[A-Za-z]+ [A-Za-z]+ \d+', line):
+        if _DATE_HEADER_RE.match(line):
             date_indices.append(i)
 
     if not date_indices or max_week < 1:

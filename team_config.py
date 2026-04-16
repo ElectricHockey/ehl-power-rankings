@@ -112,6 +112,11 @@ _auto_color_map = {}
 _TEAM_CONFIG_LOWER = {k.lower(): k for k in TEAM_CONFIG}
 
 
+def _slugify(name):
+    """Convert a name to a lowercase slug: 'Cape Cod Rangers' → 'cape_cod_rangers'."""
+    return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+
+
 def _auto_detect_logo(team_name, logo_dir):
     """Try to find a logo file matching the team name by converting to
     a filename pattern: 'Cape Cod Rangers' → 'cape_cod_rangers.png'.
@@ -121,7 +126,7 @@ def _auto_detect_logo(team_name, logo_dir):
         return None
 
     # Primary slug: strip all non-alphanumeric chars
-    slug = re.sub(r"[^a-z0-9]+", "_", team_name.lower()).strip("_")
+    slug = _slugify(team_name)
     candidate = slug + ".png"
     path = os.path.join(logo_dir, candidate)
     if os.path.isfile(path):
@@ -129,7 +134,7 @@ def _auto_detect_logo(team_name, logo_dir):
 
     # Secondary slug: replace '&' with 'and' before slugifying
     alt_name = team_name.replace("&", "and")
-    alt_slug = re.sub(r"[^a-z0-9]+", "_", alt_name.lower()).strip("_")
+    alt_slug = _slugify(alt_name)
     if alt_slug != slug:
         alt_candidate = alt_slug + ".png"
         if os.path.isfile(os.path.join(logo_dir, alt_candidate)):
@@ -144,7 +149,7 @@ def _auto_detect_logo(team_name, logo_dir):
                 continue
             # Slug the filename (minus extension) and compare to our slug
             base = os.path.splitext(fname)[0]
-            file_slug = re.sub(r"[^a-z0-9]+", "_", base.lower()).strip("_")
+            file_slug = _slugify(base)
             if file_slug == slug:
                 return fname
     except OSError:

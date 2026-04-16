@@ -53,12 +53,6 @@ def _collect_font_overrides(form):
     return overrides
 
 
-def _extract_week_number(week_label):
-    """Extract the numeric week from a label like 'WEEK 3'. Returns 0 if unparseable."""
-    m = re.search(r'(\d+)', week_label)
-    return int(m.group(1)) if m else 0
-
-
 @app.route("/", methods=["GET"])
 def index():
     return render_template("index.html")

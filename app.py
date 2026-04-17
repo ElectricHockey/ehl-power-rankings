@@ -27,6 +27,15 @@ _spec = importlib.util.spec_from_loader(
 engine = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(engine)
 
+def _parse_week_number(week_label):
+    """Extract the numeric week from a label like 'WEEK 2' or 'Week 10'.
+
+    Returns the integer (e.g. 2) or 1 if no number is found.
+    """
+    m = re.search(r'(\d+)', week_label)
+    return int(m.group(1)) if m else 1
+
+
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", os.urandom(24).hex())
 
@@ -144,9 +153,9 @@ def generate():
         os.remove(saved_path)
 
     # ── Compute movement arrows ─────────────────────────────
-    # Automatically detect how many weeks are in the schedule
-    total_weeks = engine.count_weeks(csv_text)
-    movement = engine.compute_movement(csv_text, total_weeks)
+    # Use the week number from the user's label (e.g. "WEEK 2" → 2)
+    week_num = _parse_week_number(week_label)
+    movement = engine.compute_movement(csv_text, week_num)
 
     # ── Generate image ──────────────────────────────────────
     out_filename = f"power_rankings_{uuid.uuid4().hex}.png"
@@ -277,8 +286,8 @@ def regenerate():
         return redirect(url_for("index"))
 
     # ── Compute movement arrows ─────────────────────────────
-    total_weeks = engine.count_weeks(csv_text)
-    movement = engine.compute_movement(csv_text, total_weeks)
+    week_num = _parse_week_number(week_label)
+    movement = engine.compute_movement(csv_text, week_num)
 
     # ── Generate new image ──────────────────────────────────
     out_filename = f"power_rankings_{uuid.uuid4().hex}.png"

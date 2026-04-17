@@ -155,7 +155,18 @@ def generate():
     # ── Compute movement arrows ─────────────────────────────
     # Use the week number from the user's label (e.g. "WEEK 2" → 2)
     week_num = _parse_week_number(week_label)
+    detected_weeks = engine.count_weeks(csv_text)
     movement = engine.compute_movement(csv_text, week_num)
+
+    # Diagnostic: warn user if week detection seems off
+    if week_num > 1 and detected_weeks < week_num:
+        flash(
+            f"⚠️ Only {detected_weeks} week(s) detected in the schedule "
+            f"(you selected week {week_num}). Movement arrows may not show correctly. "
+            f"Make sure each week starts with a date-header row "
+            f"(e.g. 'Saturday January 4').",
+            "error",
+        )
 
     # ── Generate image ──────────────────────────────────────
     out_filename = f"power_rankings_{uuid.uuid4().hex}.png"
@@ -287,7 +298,17 @@ def regenerate():
 
     # ── Compute movement arrows ─────────────────────────────
     week_num = _parse_week_number(week_label)
+    detected_weeks = engine.count_weeks(csv_text)
     movement = engine.compute_movement(csv_text, week_num)
+
+    if week_num > 1 and detected_weeks < week_num:
+        flash(
+            f"⚠️ Only {detected_weeks} week(s) detected in the schedule "
+            f"(you selected week {week_num}). Movement arrows may not show correctly. "
+            f"Make sure each week starts with a date-header row "
+            f"(e.g. 'Saturday January 4').",
+            "error",
+        )
 
     # ── Generate new image ──────────────────────────────────
     out_filename = f"power_rankings_{uuid.uuid4().hex}.png"

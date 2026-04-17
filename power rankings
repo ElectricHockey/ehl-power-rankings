@@ -390,43 +390,87 @@ def _looks_like_date(text):
     return bool(words & _DATE_WORDS)
 
 
+def _looks_like_numeric_date(text):
+    """Return True if *text* looks like a numeric date (e.g. ``1/4/2025``, ``01-04-25``)."""
+    return bool(re.match(r'^\d{1,2}[/\-\.]\d{1,2}[/\-\.]\d{2,4}$', text.strip()))
+
+
+def _any_cell_looks_like_date(row):
+    """Return True if ANY cell in *row* contains a recognisable date string."""
+    for cell in row:
+        val = cell.strip() if cell else ''
+        if not val:
+            continue
+        if _looks_like_date(val):
+            return True
+        if _looks_like_numeric_date(val):
+            return True
+    return False
+
+
 def _find_date_row_indices(csv_text):
     """Find the line indices of date-header rows in the CSV text.
 
-    A date-header row is identified as a row whose first cell contains a
-    recognisable date (day-of-week or month name), **or** whose first cell
-    is non-numeric non-header text with very few other filled cells.
+    A date-header row is identified by checking every cell (not just the first)
+    for recognisable date content — day/month name words **or** numeric date
+    patterns like ``1/4/2025``.  Game rows (first cell starts with a digit
+    followed by a space or end-of-cell) are excluded.
 
-    The date-word check is the primary method and works regardless of how
-    many other columns the row has (e.g. arena / rink info alongside the
-    date).  The structural fallback (``non_empty_others <= 1``) catches
-    unusual date formats that lack English day/month names.
+    The function also uses the original simple regex as a fast-path on the raw
+    CSV line: ``^"?[A-Za-z]+ [A-Za-z]+ \\d+`` matches the "DayName MonthName Day"
+    format produced by ``xlsx_to_csv_text``.
     """
     lines = csv_text.strip().split('\n')
     indices = []
     for i, line in enumerate(lines):
+        stripped = line.strip()
+        if not stripped:
+            continue
+
+        # Fast-path: original regex on raw line — matches "Saturday January 4,..."
+        if re.match(r'^"?[A-Za-z]+ [A-Za-z]+ \d+', stripped):
+            indices.append(i)
+            continue
+
         try:
-            row = next(csv.reader([line]))
+            row = next(csv.reader([stripped]))
         except (StopIteration, csv.Error):
             continue
-        if not row or not row[0].strip():
+        if not row:
             continue
+
         cell0 = row[0].strip()
-        # Game rows start with a digit (game number / time)
-        if re.match(r'^\d', cell0):
+
+        # Game rows: first cell is a game number (digits then space/time or end)
+        # e.g. "1 8:00 PM", "12", "123 7:30 PM"
+        if cell0 and re.match(r'^\d+(\s|$)', cell0):
             continue
+
         # Column-header rows
-        lower0 = cell0.lower()
-        if lower0.startswith('date') or lower0.startswith('game') or lower0 == '#':
-            continue
-        # Primary: first cell contains a day-of-week or month name
-        if _looks_like_date(cell0):
+        if cell0:
+            lower0 = cell0.lower()
+            if lower0.startswith('date') or lower0.startswith('game') or lower0 == '#':
+                continue
+
+        # Check cell0 for date content
+        if cell0 and (_looks_like_date(cell0) or _looks_like_numeric_date(cell0)):
             indices.append(i)
             continue
-        # Fallback: non-game text row with very few other filled cells
-        non_empty_others = sum(1 for c in row[1:] if c and c.strip())
-        if non_empty_others <= 1:
-            indices.append(i)
+
+        # Check ALL cells — date might not be in column 0 (e.g. empty first col)
+        if _any_cell_looks_like_date(row):
+            # Make sure this isn't a game row with a date somewhere in it
+            # Game rows have multiple non-empty cells (scores, team names, status)
+            non_empty = sum(1 for c in row if c and c.strip())
+            if non_empty <= 3:  # date rows typically have 1-3 filled cells
+                indices.append(i)
+                continue
+
+        # Fallback: non-game text in cell0 with very few other filled cells
+        if cell0 and not re.match(r'^\d', cell0):
+            non_empty_others = sum(1 for c in row[1:] if c and c.strip())
+            if non_empty_others <= 1:
+                indices.append(i)
     return indices
 
 

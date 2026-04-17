@@ -30,8 +30,12 @@ _spec.loader.exec_module(engine)
 def _parse_week_number(week_label):
     """Extract the numeric week from a label like 'WEEK 2' or 'Week 10'.
 
-    Returns the integer (e.g. 2) or 1 if no number is found.
+    Looks for digits following the word "week" first; falls back to the first
+    number found.  Returns 1 if no number is found.
     """
+    m = re.search(r'(?i)week\s*(\d+)', week_label)
+    if m:
+        return int(m.group(1))
     m = re.search(r'(\d+)', week_label)
     return int(m.group(1)) if m else 1
 

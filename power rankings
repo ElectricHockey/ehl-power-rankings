@@ -443,7 +443,7 @@ def _find_date_row_indices(csv_text):
 
         # Game rows: first cell is a game number (digits then space/time or end)
         # e.g. "1 8:00 PM", "12", "123 7:30 PM"
-        if cell0 and re.match(r'^\d+(\s|$)', cell0):
+        if cell0 and re.match(r'^\d+(?:\s|$)', cell0):
             continue
 
         # Column-header rows
@@ -467,7 +467,7 @@ def _find_date_row_indices(csv_text):
                 continue
 
         # Fallback: non-game text in cell0 with very few other filled cells
-        if cell0 and not re.match(r'^\d', cell0):
+        if cell0 and not re.match(r'^\d+(?:\s|$)', cell0):
             non_empty_others = sum(1 for c in row[1:] if c and c.strip())
             if non_empty_others <= 1:
                 indices.append(i)

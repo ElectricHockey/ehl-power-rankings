@@ -374,14 +374,33 @@ def print_movement(season_rankings, weekly_rankings):
 # WEEK HELPERS
 # ============================================================
 
+_DAY_NAMES = frozenset({
+    'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
+})
+_MONTH_NAMES = frozenset({
+    'january', 'february', 'march', 'april', 'may', 'june',
+    'july', 'august', 'september', 'october', 'november', 'december',
+})
+_DATE_WORDS = _DAY_NAMES | _MONTH_NAMES
+
+
+def _looks_like_date(text):
+    """Return True if *text* contains a recognisable day-of-week or month name."""
+    words = set(re.split(r'[\s,/\-]+', text.lower().strip()))
+    return bool(words & _DATE_WORDS)
+
+
 def _find_date_row_indices(csv_text):
     """Find the line indices of date-header rows in the CSV text.
 
-    A date-header row is identified as a row whose first cell contains text
-    (not starting with a digit and not a known column-header keyword) while
-    most remaining cells are empty.  This is far more robust than a single
-    regex because date formats vary widely between .csv and .xlsx exports
-    (e.g. ``"Saturday, January 4, 2025"`` vs ``Monday January 6``).
+    A date-header row is identified as a row whose first cell contains a
+    recognisable date (day-of-week or month name), **or** whose first cell
+    is non-numeric non-header text with very few other filled cells.
+
+    The date-word check is the primary method and works regardless of how
+    many other columns the row has (e.g. arena / rink info alongside the
+    date).  The structural fallback (``non_empty_others <= 1``) catches
+    unusual date formats that lack English day/month names.
     """
     lines = csv_text.strip().split('\n')
     indices = []
@@ -400,7 +419,11 @@ def _find_date_row_indices(csv_text):
         lower0 = cell0.lower()
         if lower0.startswith('date') or lower0.startswith('game') or lower0 == '#':
             continue
-        # Date/section headers typically have content only in the first cell
+        # Primary: first cell contains a day-of-week or month name
+        if _looks_like_date(cell0):
+            indices.append(i)
+            continue
+        # Fallback: non-game text row with very few other filled cells
         non_empty_others = sum(1 for c in row[1:] if c and c.strip())
         if non_empty_others <= 1:
             indices.append(i)

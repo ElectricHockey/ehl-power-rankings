@@ -91,6 +91,12 @@ def generate():
     week_label = request.form.get("week_label", "WEEK 1").strip() or "WEEK 1"
     div_label = request.form.get("div_label", "3'S").strip() or "3'S"
 
+    # Game days per week: how many date-header rows make up one week
+    try:
+        days_per_week = max(1, int(request.form.get("days_per_week", "1")))
+    except (ValueError, TypeError):
+        days_per_week = 1
+
     # ── Collect font size overrides ─────────────────────────
     font_overrides = _collect_font_overrides(request.form)
 
@@ -153,29 +159,25 @@ def generate():
     session["csv_text"] = csv_text
     session["week_label"] = week_label
     session["div_label"] = div_label
+    session["days_per_week"] = days_per_week
     if os.path.exists(saved_path):
         os.remove(saved_path)
 
     # ── Compute movement arrows ─────────────────────────────
     # Use the week number from the user's label (e.g. "WEEK 2" → 2)
     week_num = _parse_week_number(week_label)
-    detected_weeks = engine.count_weeks(csv_text)
-    movement = engine.compute_movement(csv_text, week_num)
+    detected_weeks = engine.count_weeks(csv_text, days_per_week)
+    movement = engine.compute_movement(csv_text, week_num, days_per_week)
 
     # Diagnostic: warn user if week detection seems off
+    n_date_rows = len(engine._find_date_row_indices(csv_text))
     if week_num > 1 and detected_weeks < week_num:
-        # Show first few lines of CSV so user can see what we're working with
-        csv_lines = csv_text.strip().split('\n')
-        sample = []
-        for ln in csv_lines[:6]:
-            cells = ln.strip()[:80]
-            sample.append(cells)
-        sample_text = " | ".join(sample)
         flash(
-            f"⚠️ Found {detected_weeks} week boundary(s) in the schedule but you "
+            f"⚠️ Found {n_date_rows} game-day(s) in the schedule "
+            f"({detected_weeks} week(s) at {days_per_week} day(s)/week) but you "
             f"selected week {week_num}. Movement arrows need at least {week_num} "
-            f"week boundaries. Each week should start with a non-game row (date header). "
-            f"First rows: {sample_text}",
+            f"week(s) of data. Check that your file has enough weeks and that "
+            f"'Game Days Per Week' is set correctly.",
             "error",
         )
 
@@ -236,6 +238,7 @@ def generate():
         image_file=out_filename,
         week_label=week_label,
         div_label=div_label,
+        days_per_week=days_per_week,
         total_ranked=len(rankings),
         team_colors=team_colors,
         font_sizes=active_font_sizes,
@@ -275,6 +278,7 @@ def regenerate():
     csv_text = session.get("csv_text")
     week_label = session.get("week_label", "WEEK 1")
     div_label = session.get("div_label", "3'S")
+    days_per_week = session.get("days_per_week", 1)
 
     if not csv_text:
         flash("Session expired. Please upload the schedule again.", "error")
@@ -309,21 +313,17 @@ def regenerate():
 
     # ── Compute movement arrows ─────────────────────────────
     week_num = _parse_week_number(week_label)
-    detected_weeks = engine.count_weeks(csv_text)
-    movement = engine.compute_movement(csv_text, week_num)
+    detected_weeks = engine.count_weeks(csv_text, days_per_week)
+    movement = engine.compute_movement(csv_text, week_num, days_per_week)
 
+    n_date_rows = len(engine._find_date_row_indices(csv_text))
     if week_num > 1 and detected_weeks < week_num:
-        csv_lines = csv_text.strip().split('\n')
-        sample = []
-        for ln in csv_lines[:6]:
-            cells = ln.strip()[:80]
-            sample.append(cells)
-        sample_text = " | ".join(sample)
         flash(
-            f"⚠️ Found {detected_weeks} week boundary(s) in the schedule but you "
+            f"⚠️ Found {n_date_rows} game-day(s) in the schedule "
+            f"({detected_weeks} week(s) at {days_per_week} day(s)/week) but you "
             f"selected week {week_num}. Movement arrows need at least {week_num} "
-            f"week boundaries. Each week should start with a non-game row (date header). "
-            f"First rows: {sample_text}",
+            f"week(s) of data. Check that your file has enough weeks and that "
+            f"'Game Days Per Week' is set correctly.",
             "error",
         )
 
@@ -382,6 +382,7 @@ def regenerate():
         image_file=out_filename,
         week_label=week_label,
         div_label=div_label,
+        days_per_week=days_per_week,
         total_ranked=len(rankings),
         team_colors=team_colors,
         font_sizes=active_font_sizes,

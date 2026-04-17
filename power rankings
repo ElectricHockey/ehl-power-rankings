@@ -374,39 +374,6 @@ def print_movement(season_rankings, weekly_rankings):
 # WEEK HELPERS
 # ============================================================
 
-_DAY_NAMES = frozenset({
-    'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
-})
-_MONTH_NAMES = frozenset({
-    'january', 'february', 'march', 'april', 'may', 'june',
-    'july', 'august', 'september', 'october', 'november', 'december',
-})
-_DATE_WORDS = _DAY_NAMES | _MONTH_NAMES
-
-
-def _looks_like_date(text):
-    """Return True if *text* contains a recognisable day-of-week or month name."""
-    words = set(re.split(r'[\s,/\-]+', text.lower().strip()))
-    return bool(words & _DATE_WORDS)
-
-
-def _looks_like_numeric_date(text):
-    """Return True if *text* looks like a numeric date (e.g. ``1/4/2025``, ``01-04-25``)."""
-    return bool(re.match(r'^\d{1,2}[/\-\.]\d{1,2}[/\-\.]\d{2,4}$', text.strip()))
-
-
-def _any_cell_looks_like_date(row):
-    """Return True if ANY cell in *row* contains a recognisable date string."""
-    for cell in row:
-        val = cell.strip() if cell else ''
-        if not val:
-            continue
-        if _looks_like_date(val):
-            return True
-        if _looks_like_numeric_date(val):
-            return True
-    return False
-
 
 def _find_date_row_indices(csv_text):
     """Find the line indices of week-boundary rows in the CSV text.
@@ -461,17 +428,24 @@ def _find_date_row_indices(csv_text):
     return indices
 
 
-def count_weeks(csv_text):
-    """Count the number of date-section (week) boundaries in the schedule."""
-    return len(_find_date_row_indices(csv_text))
+def count_weeks(csv_text, days_per_week=1):
+    """Count the number of weeks in the schedule.
+
+    *days_per_week* is how many date-header rows (game-days) make up one
+    week.  For example if there are 6 date rows and ``days_per_week=3``,
+    the schedule contains 2 weeks.
+    """
+    n_dates = len(_find_date_row_indices(csv_text))
+    dpw = max(1, days_per_week)
+    return n_dates // dpw
 
 
-def schedule_up_to_week(csv_text, max_week):
+def schedule_up_to_week(csv_text, max_week, days_per_week=1):
     """Return CSV text containing only games from weeks 1 through *max_week*.
 
-    Each date-header row in the schedule is treated as the start of a new
-    week.  Week 1 = first date section, week 2 = first two sections, etc.
-    If *max_week* >= total weeks, all games are included.
+    *days_per_week* is how many date-header rows (game-days) make up one
+    week.  The function includes all rows up to the date-header row at
+    index ``max_week * days_per_week``.
     """
     lines = csv_text.strip().split('\n')
     date_indices = _find_date_row_indices(csv_text)
@@ -479,28 +453,32 @@ def schedule_up_to_week(csv_text, max_week):
     if not date_indices or max_week < 1:
         return csv_text
 
-    max_week = min(max_week, len(date_indices))
-    if max_week < len(date_indices):
-        end_idx = date_indices[max_week]
+    dpw = max(1, days_per_week)
+    # Number of date-rows to include: week N means first N*dpw date sections
+    max_date_rows = max_week * dpw
+    max_date_rows = min(max_date_rows, len(date_indices))
+
+    if max_date_rows < len(date_indices):
+        end_idx = date_indices[max_date_rows]
     else:
         end_idx = len(lines)
 
     return '\n'.join(lines[:end_idx])
 
 
-def compute_movement(csv_text, target_week):
+def compute_movement(csv_text, target_week, days_per_week=1):
     """Compare rankings through *target_week* vs *target_week - 1*.
 
-    Returns a dict ``{team_name: int}`` where a positive value means
-    the team moved **up** (e.g. +2 = rose two spots) and negative means
-    they moved **down**.  Teams new this week get ``None``.
-    Returns an empty dict when there is no previous week.
+    *days_per_week* is how many date-header rows (game-days) make up one
+    week.  Returns a dict ``{team_name: int}`` where a positive value means
+    the team moved **up** and negative means **down**.  Teams new this week
+    get ``None``.  Returns an empty dict when there is no previous week.
     """
     if target_week <= 1:
         return {}
 
-    current_csv = schedule_up_to_week(csv_text, target_week)
-    prev_csv = schedule_up_to_week(csv_text, target_week - 1)
+    current_csv = schedule_up_to_week(csv_text, target_week, days_per_week)
+    prev_csv = schedule_up_to_week(csv_text, target_week - 1, days_per_week)
 
     current_teams = parse_schedule(current_csv)
     current_rankings = calculate_power_scores(current_teams)

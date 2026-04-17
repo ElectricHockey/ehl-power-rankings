@@ -56,7 +56,8 @@
       margin-bottom: 18px;
     }
     .row .field { flex: 1; }
-    .row input[type="text"] {
+    .row input[type="text"],
+    .row input[type="number"] {
       width: 100%;
       padding: 10px;
       background: #222;
@@ -181,6 +182,11 @@
         <div class="field">
           <label for="week_label">Week</label>
           <input type="text" id="week_label" name="week_label" placeholder="WEEK 1" value="WEEK 1">
+        </div>
+        <div class="field">
+          <label for="days_per_week">Game Days / Week</label>
+          <input type="number" id="days_per_week" name="days_per_week" min="1" max="7" value="1"
+                 title="How many game-days in each week of the schedule">
         </div>
       </div>
 

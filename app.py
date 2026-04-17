@@ -164,11 +164,18 @@ def generate():
 
     # Diagnostic: warn user if week detection seems off
     if week_num > 1 and detected_weeks < week_num:
+        # Show first few lines of CSV so user can see what we're working with
+        csv_lines = csv_text.strip().split('\n')
+        sample = []
+        for ln in csv_lines[:6]:
+            cells = ln.strip()[:80]
+            sample.append(cells)
+        sample_text = " | ".join(sample)
         flash(
-            f"⚠️ Only {detected_weeks} week(s) detected in the schedule "
-            f"(you selected week {week_num}). Movement arrows may not show correctly. "
-            f"Make sure each week starts with a date-header row "
-            f"(e.g. 'Saturday January 4').",
+            f"⚠️ Found {detected_weeks} week boundary(s) in the schedule but you "
+            f"selected week {week_num}. Movement arrows need at least {week_num} "
+            f"week boundaries. Each week should start with a non-game row (date header). "
+            f"First rows: {sample_text}",
             "error",
         )
 
@@ -306,11 +313,17 @@ def regenerate():
     movement = engine.compute_movement(csv_text, week_num)
 
     if week_num > 1 and detected_weeks < week_num:
+        csv_lines = csv_text.strip().split('\n')
+        sample = []
+        for ln in csv_lines[:6]:
+            cells = ln.strip()[:80]
+            sample.append(cells)
+        sample_text = " | ".join(sample)
         flash(
-            f"⚠️ Only {detected_weeks} week(s) detected in the schedule "
-            f"(you selected week {week_num}). Movement arrows may not show correctly. "
-            f"Make sure each week starts with a date-header row "
-            f"(e.g. 'Saturday January 4').",
+            f"⚠️ Found {detected_weeks} week boundary(s) in the schedule but you "
+            f"selected week {week_num}. Movement arrows need at least {week_num} "
+            f"week boundaries. Each week should start with a non-game row (date header). "
+            f"First rows: {sample_text}",
             "error",
         )
 

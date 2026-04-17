@@ -409,27 +409,19 @@ def _any_cell_looks_like_date(row):
 
 
 def _find_date_row_indices(csv_text):
-    """Find the line indices of date-header rows in the CSV text.
+    """Find the line indices of week-boundary rows in the CSV text.
 
-    A date-header row is identified by checking every cell (not just the first)
-    for recognisable date content — day/month name words **or** numeric date
-    patterns like ``1/4/2025``.  Game rows (first cell starts with a digit
-    followed by a space or end-of-cell) are excluded.
-
-    The function also uses the original simple regex as a fast-path on the raw
-    CSV line: ``^"?[A-Za-z]+ [A-Za-z]+ \\d+`` matches the "DayName MonthName Day"
-    format produced by ``xlsx_to_csv_text``.
+    A week-boundary row is any row that is **not** a game row and **not** a
+    recognised column-header row.  Game rows are identified by their first
+    cell matching the pattern ``digits + space`` (e.g. ``1 8:00 PM``,
+    ``24 9:15 PM``).  This approach works regardless of the date format used
+    in the schedule (text dates, numeric dates, datetime objects, etc.).
     """
     lines = csv_text.strip().split('\n')
     indices = []
     for i, line in enumerate(lines):
         stripped = line.strip()
         if not stripped:
-            continue
-
-        # Fast-path: original regex on raw line — matches "Saturday January 4,..."
-        if re.match(r'^"?[A-Za-z]+ [A-Za-z]+ \d+', stripped):
-            indices.append(i)
             continue
 
         try:
@@ -439,38 +431,33 @@ def _find_date_row_indices(csv_text):
         if not row:
             continue
 
-        cell0 = row[0].strip()
+        # Check every cell — find the first non-empty one
+        first_non_empty = ''
+        for cell in row:
+            val = cell.strip() if cell else ''
+            if val:
+                first_non_empty = val
+                break
 
-        # Game rows: first cell is a game number (digits then space/time or end)
-        # e.g. "1 8:00 PM", "12", "123 7:30 PM"
-        if cell0 and re.match(r'^\d+(?:\s|$)', cell0):
+        if not first_non_empty:
+            continue  # completely empty row
+
+        # Game rows: first non-empty cell starts with digits + space (game # + time)
+        # e.g. "1 8:00 PM", "24 9:15 PM", "100 7:00 PM"
+        if re.match(r'^\d+\s', first_non_empty):
             continue
 
-        # Column-header rows
-        if cell0:
-            lower0 = cell0.lower()
-            if lower0.startswith('date') or lower0.startswith('game') or lower0 == '#':
-                continue
-
-        # Check cell0 for date content
-        if cell0 and (_looks_like_date(cell0) or _looks_like_numeric_date(cell0)):
-            indices.append(i)
+        # Column-header rows (skip the table header, not a week boundary)
+        lower_val = first_non_empty.lower()
+        if lower_val in ('#', 'game', 'game#', 'game #', 'date', 'home', 'away'):
+            continue
+        if lower_val.startswith('date') and len(lower_val) < 10:
+            continue
+        if lower_val.startswith('game') and len(lower_val) < 10:
             continue
 
-        # Check ALL cells — date might not be in column 0 (e.g. empty first col)
-        if _any_cell_looks_like_date(row):
-            # Make sure this isn't a game row with a date somewhere in it
-            # Game rows have multiple non-empty cells (scores, team names, status)
-            non_empty = sum(1 for c in row if c and c.strip())
-            if non_empty <= 3:  # date rows typically have 1-3 filled cells
-                indices.append(i)
-                continue
-
-        # Fallback: non-game text in cell0 with very few other filled cells
-        if cell0 and not re.match(r'^\d+(?:\s|$)', cell0):
-            non_empty_others = sum(1 for c in row[1:] if c and c.strip())
-            if non_empty_others <= 1:
-                indices.append(i)
+        # Everything else is a week boundary (date row, section header, etc.)
+        indices.append(i)
     return indices
 
 

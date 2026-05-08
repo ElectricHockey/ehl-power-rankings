@@ -504,9 +504,10 @@ def _find_date_row_indices(csv_text):
         if not first_non_empty:
             continue  # completely empty row
 
-        # Game rows: first non-empty cell starts with digits + space (game # + time)
-        # e.g. "1 8:00 PM", "24 9:15 PM", "100 7:00 PM"
-        if re.match(r'^\d+\s', first_non_empty):
+        # Game rows: first non-empty cell is either just a game number ("1")
+        # or game number + time ("1 8:00 PM", "24 9:15 PM").
+        # Date strings like "1/6/2025" are excluded by this pattern.
+        if re.match(r'^\d+(?:\s.*)?$', first_non_empty):
             continue
 
         # Column-header rows (skip the table header, not a week boundary)
@@ -629,9 +630,12 @@ def xlsx_to_csv_text(xlsx_path):
             elif isinstance(c, _dt.date):
                 converted.append(c.strftime("%A %B ") + str(c.day))
             elif isinstance(c, (int, float)):
-                # Excel often stores whole numbers as float; convert to int
-                if isinstance(c, float) and c == int(c):
-                    converted.append(str(int(c)))
+                # Excel often stores whole numbers as float; convert to int safely
+                if isinstance(c, float) and c.is_integer():
+                    try:
+                        converted.append(str(int(c)))
+                    except (OverflowError, ValueError):
+                        converted.append(str(c))
                 else:
                     converted.append(str(c))
             else:

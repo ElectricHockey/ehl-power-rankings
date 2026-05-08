@@ -1,4 +1,5 @@
 import csv
+import math
 import re
 from collections import defaultdict
 from io import StringIO
@@ -104,6 +105,33 @@ class Team:
 # ============================================================
 # CSV PARSER
 # ============================================================
+
+def _looks_like_game_row(first_cell):
+    """Return True when the first schedule cell looks like a game row."""
+    val = (first_cell or '').strip()
+    if not val:
+        return False
+    # Examples:
+    # - "1"
+    # - "1 8:00 PM"
+    # - "24 9:15 PM"
+    if re.match(r'^\d+$', val):
+        return True
+    if re.match(r'^\d+\s+\d{1,2}:\d{2}(?:\s*[AP]M)?$', val, re.IGNORECASE):
+        return True
+    return False
+
+
+def _parse_score_cell(raw):
+    """Parse a score cell to int while rejecting non-integer numeric values."""
+    value = float(raw)
+    if not math.isfinite(value):
+        raise ValueError("score is not finite")
+    rounded = round(value)
+    if abs(value - rounded) > 1e-9:
+        raise ValueError("score is not an integer value")
+    return int(rounded)
+
 
 def parse_schedule(csv_text):
     """
@@ -214,8 +242,8 @@ def parse_schedule(csv_text):
         if not first_non_empty:
             continue
 
-        # Game rows start with a game number.
-        if not re.match(r'^\d+', first_non_empty):
+        # Game rows start with a game number/time cell.
+        if not _looks_like_game_row(first_non_empty):
             continue
 
         home_name = _get_cell(row, col_idx['home_name'])
@@ -242,8 +270,8 @@ def parse_schedule(csv_text):
             is_ot = True
 
         try:
-            home_score = int(float(home_score_raw))
-            away_score = int(float(away_score_raw))
+            home_score = _parse_score_cell(home_score_raw)
+            away_score = _parse_score_cell(away_score_raw)
         except (ValueError, OverflowError):
             continue
 
@@ -504,10 +532,8 @@ def _find_date_row_indices(csv_text):
         if not first_non_empty:
             continue  # completely empty row
 
-        # Game rows: first non-empty cell is either just a game number ("1")
-        # or game number + time ("1 8:00 PM", "24 9:15 PM").
-        # Date strings like "1/6/2025" are excluded by this pattern.
-        if re.match(r'^\d+(?:\s.*)?$', first_non_empty):
+        # Game rows (e.g. "1" or "1 8:00 PM").
+        if _looks_like_game_row(first_non_empty):
             continue
 
         # Column-header rows (skip the table header, not a week boundary)

@@ -118,30 +118,111 @@ def parse_schedule(csv_text):
             teams[name] = Team(name)
         return teams[name]
 
+    def _clean_header(text):
+        return re.sub(r'[^a-z0-9]+', ' ', str(text or '').strip().lower()).strip()
+
+    def _get_cell(row, idx):
+        if idx is None or idx < 0 or idx >= len(row):
+            return ''
+        return row[idx].strip()
+
+    def _infer_columns(row, current):
+        """Infer column positions from a header row when present."""
+        inferred = dict(current)
+        found = set()
+
+        for i, cell in enumerate(row):
+            c = _clean_header(cell)
+            if not c:
+                continue
+
+            # Scores before team-name checks to avoid collisions ("home score")
+            if 'home' in c and ('score' in c or 'goal' in c):
+                inferred['home_score'] = i
+                found.add('home_score')
+                continue
+            if 'away' in c and ('score' in c or 'goal' in c):
+                inferred['away_score'] = i
+                found.add('away_score')
+                continue
+
+            if c in ('#', 'game', 'game #', 'game number', 'game num', 'match'):
+                inferred['game'] = i
+                found.add('game')
+                continue
+            if 'home' in c and 'team' in c:
+                inferred['home_name'] = i
+                found.add('home_name')
+                continue
+            if 'away' in c and 'team' in c:
+                inferred['away_name'] = i
+                found.add('away_name')
+                continue
+            if c == 'home':
+                inferred['home_name'] = i
+                found.add('home_name')
+                continue
+            if c == 'away':
+                inferred['away_name'] = i
+                found.add('away_name')
+                continue
+            if c in ('ot', 'overtime'):
+                inferred['ot'] = i
+                found.add('ot')
+                continue
+            if 'status' in c or c in ('result', 'results'):
+                inferred['status'] = i
+                found.add('status')
+                continue
+
+        is_header = (
+            ('home_name' in found and 'away_name' in found)
+            and ('home_score' in found or 'away_score' in found or 'status' in found or 'game' in found)
+        )
+        return inferred, is_header
+
+    # Default mapping for existing CSV layout
+    col_idx = {
+        'game': 0,
+        'home_name': 1,
+        'home_score': 2,
+        'ot': 3,
+        'away_score': 4,
+        'away_name': 5,
+        'status': 7,
+    }
+
     lines = csv_text.strip().split('\n')
     reader = csv.reader(lines)
 
     for row in reader:
-        # Skip header row and date rows
-        if len(row) < 8:
-            continue
-        if row[0].startswith('Date') or row[0].startswith('"') or not row[0].strip():
+        if not row:
             continue
 
-        game_num_time = row[0].strip()
-        # Check it's a game row (starts with digits)
-        if not re.match(r'^\d+', game_num_time):
+        # Update column indices whenever a header row appears.
+        col_idx, is_header = _infer_columns(row, col_idx)
+        if is_header:
             continue
 
-        # CSV columns: 0=game#, 1=home, 2=home_score, 3=OT marker (or empty),
-        #              4=away_score, 5=away, 6=empty, 7=status
-        home_name   = row[1].strip()
-        away_name   = row[5].strip() if len(row) > 5 else ''
-        status      = row[7].strip() if len(row) > 7 else ''
-
-        # Skip incomplete or in-progress games
-        if status.lower() in ('incomplete', 'in progress', ''):
+        # Find first non-empty cell to detect game/date rows robustly.
+        first_non_empty = ''
+        for cell in row:
+            val = (cell or '').strip()
+            if val:
+                first_non_empty = val
+                break
+        if not first_non_empty:
             continue
+
+        # Game rows start with a game number.
+        if not re.match(r'^\d+', first_non_empty):
+            continue
+
+        home_name = _get_cell(row, col_idx['home_name'])
+        away_name = _get_cell(row, col_idx['away_name'])
+        status = _get_cell(row, col_idx['status'])
+
+        status_norm = status.lower()
 
         # Skip if team names are missing
         if not home_name or not away_name:
@@ -150,13 +231,13 @@ def parse_schedule(csv_text):
         home_team = get_team(home_name)
         away_team = get_team(away_name)
 
-        # Parse scores – home score is col 2, away score is col 4
-        home_score_raw = row[2].strip() if len(row) > 2 else ''
-        away_score_raw = row[4].strip() if len(row) > 4 else ''
+        # Parse scores
+        home_score_raw = _get_cell(row, col_idx['home_score'])
+        away_score_raw = _get_cell(row, col_idx['away_score'])
 
-        # Check if col 3 contains "OT" marker
+        # Check OT marker column (if present)
         is_ot = False
-        middle = row[3].strip() if len(row) > 3 else ''
+        middle = _get_cell(row, col_idx['ot'])
         if middle.upper() == 'OT':
             is_ot = True
 
@@ -166,8 +247,22 @@ def parse_schedule(csv_text):
         except (ValueError, OverflowError):
             continue
 
+        # Normalize status values for different export layouts.
+        if status_norm in ('', 'completed', 'complete', 'final'):
+            normalized_status = 'completed'
+            # Some layouts use values like "Final/OT" in status.
+            if 'ot' in status_norm:
+                is_ot = True
+        elif status_norm in ('forfeit', 'forfeited'):
+            normalized_status = 'forfeit'
+        elif status_norm in ('incomplete', 'in progress', 'scheduled', 'postponed'):
+            continue
+        else:
+            # Unknown status strings are ignored.
+            continue
+
         # ---- FORFEIT HANDLING ----
-        if status.lower() == 'forfeit':
+        if normalized_status == 'forfeit':
             # In your data: the loser forfeited.
             # Score of 1-0 means the team with 0 forfeited.
             if home_score > away_score:
@@ -193,7 +288,7 @@ def parse_schedule(csv_text):
             # Goals NOT counted for forfeits (don't reward/penalize GD on forfeits)
 
         # ---- COMPLETED GAME HANDLING ----
-        elif status.lower() == 'completed':
+        elif normalized_status == 'completed':
             home_team.goals_for     += home_score
             home_team.goals_against += away_score
             away_team.goals_for     += away_score

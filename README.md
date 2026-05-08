@@ -26,13 +26,18 @@ This writes `power_rankings.png` to the current directory.
 
 ## Schedule Format
 
-The schedule file (.xlsx or .csv) must follow this column layout:
+The schedule file (.xlsx or .csv) supports header-based parsing and works with
+the exact exported layout used in league schedule spreadsheets (including files
+like `schedule (8).xlsx`).
+
+Preferred columns are:
 
 | Col 0 | Col 1 | Col 2 | Col 3 | Col 4 | Col 5 | … | Col 7 |
 |-------|-------|-------|-------|-------|-------|---|-------|
 | Game # & Time | Home Team | Home Score | OT (or empty) | Away Score | Away Team | … | Status |
 
-- **Status** must be `Completed` or `Forfeit` (rows with other statuses are skipped).
+- Header names are auto-detected (`Home Team`, `Away Team`, score columns, `OT`, `Status`/`Result`).
+- **Status** accepts `Completed`, `Complete`, `Final`, or `Forfeit`.
 - Date header rows (e.g. `"Monday January 6"`) are ignored automatically.
 - For overtime games the row should be: `Game,Home,HomeScore,OT,AwayScore,Away,...,Completed`
 

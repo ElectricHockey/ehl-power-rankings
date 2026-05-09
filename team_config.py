@@ -6,6 +6,7 @@
 
 import os
 import re
+from PIL import Image
 
 
 def hex_to_rgb(hex_str):
@@ -187,6 +188,7 @@ _AUTO_COLORS = [
     (60, 100, 120),   # Cadet
 ]
 _auto_color_map = {}
+_logo_style_cache = {}
 
 
 # Build a case-insensitive lookup for TEAM_CONFIG
@@ -239,37 +241,141 @@ def _auto_detect_logo(team_name, logo_dir):
     return None
 
 
+def _clamp_channel(val):
+    return max(0, min(255, int(round(val))))
+
+
+def _mix_rgb(c1, c2, t):
+    """Linear blend c1 -> c2 by t in [0,1]."""
+    return (
+        _clamp_channel(c1[0] + (c2[0] - c1[0]) * t),
+        _clamp_channel(c1[1] + (c2[1] - c1[1]) * t),
+        _clamp_channel(c1[2] + (c2[2] - c1[2]) * t),
+    )
+
+
+def _color_distance(c1, c2):
+    return (
+        (c1[0] - c2[0]) ** 2 +
+        (c1[1] - c2[1]) ** 2 +
+        (c1[2] - c2[2]) ** 2
+    ) ** 0.5
+
+
+def _relative_luminance(rgb):
+    """Approximate luminance for contrast checks."""
+    r, g, b = rgb
+    return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255.0
+
+
+def _contrast_text_color(bg_rgb):
+    """Return black or white based on background luminance."""
+    return (0, 0, 0) if _relative_luminance(bg_rgb) >= 0.6 else (255, 255, 255)
+
+
+def _extract_logo_gradient_style(logo_path):
+    """Extract primary/secondary colors from a logo for bar gradient styling."""
+    cached = _logo_style_cache.get(logo_path)
+    if cached is not None:
+        return cached
+
+    try:
+        img = Image.open(logo_path).convert("RGBA")
+        img.thumbnail((96, 96), Image.Resampling.LANCZOS)
+
+        # Keep only visible-ish pixels to avoid transparent padding bias.
+        visible = []
+        for r, g, b, a in img.getdata():
+            if a >= 40:
+                visible.append((r, g, b))
+
+        if not visible:
+            _logo_style_cache[logo_path] = None
+            return None
+
+        # Reduce to representative palette; keeps dominant logo colors.
+        palette_img = Image.new("RGB", (len(visible), 1))
+        palette_img.putdata(visible)
+        pal = palette_img.quantize(colors=6, method=Image.Quantize.MEDIANCUT)
+        rgb_pal = pal.convert("RGB")
+        counts = rgb_pal.getcolors(maxcolors=256) or []
+        if not counts:
+            _logo_style_cache[logo_path] = None
+            return None
+        counts.sort(key=lambda x: x[0], reverse=True)
+        colors = [c for _n, c in counts]
+
+        primary = colors[0]
+        secondary = None
+        for c in colors[1:]:
+            if _color_distance(primary, c) >= 50:
+                secondary = c
+                break
+        if secondary is None:
+            # Create a subtle two-tone gradient if logo is mostly one color.
+            lum = _relative_luminance(primary)
+            if lum < 0.5:
+                secondary = _mix_rgb(primary, (255, 255, 255), 0.30)
+            else:
+                secondary = _mix_rgb(primary, (0, 0, 0), 0.25)
+
+        mid = _mix_rgb(primary, secondary, 0.5)
+        style = {
+            "bar_color": primary,
+            "bar_gradient": (primary, secondary),
+            "text_color": _contrast_text_color(mid),
+        }
+        _logo_style_cache[logo_path] = style
+        return style
+    except Exception:
+        _logo_style_cache[logo_path] = None
+        return None
+
+
+def _apply_logo_colors(team_name, style, logo_dir):
+    """Attach detected logo + logo-derived colors when available."""
+    out = dict(style)
+
+    logo_file = out.get("logo")
+    if logo_dir and (not logo_file):
+        logo_file = _auto_detect_logo(team_name, logo_dir)
+    if logo_file:
+        out["logo"] = logo_file
+    if not logo_dir or not logo_file:
+        return out
+
+    logo_path = os.path.join(logo_dir, logo_file)
+    if not os.path.isfile(logo_path):
+        return out
+
+    derived = _extract_logo_gradient_style(logo_path)
+    if not derived:
+        return out
+    out.update(derived)
+    return out
+
+
 def get_team_style(team_name, logo_dir=None):
     """Return the style dict for a team, using case-insensitive matching.
     Auto-assigns a unique color to teams not listed in TEAM_CONFIG.
     If logo_dir is provided, attempts auto-detection of logo files."""
     # Exact match first
     if team_name in TEAM_CONFIG:
-        style = TEAM_CONFIG[team_name]
-        # If logo is set but logo_dir provided, verify the file exists
-        if logo_dir and style.get("logo"):
-            path = os.path.join(logo_dir, style["logo"])
-            if not os.path.isfile(path):
-                # Try auto-detect as fallback
-                detected = _auto_detect_logo(team_name, logo_dir)
-                if detected:
-                    style = dict(style)
-                    style["logo"] = detected
-        return style
+        return _apply_logo_colors(team_name, TEAM_CONFIG[team_name], logo_dir)
 
     # Case-insensitive match
     lower_name = team_name.lower()
     if lower_name in _TEAM_CONFIG_LOWER:
         canonical = _TEAM_CONFIG_LOWER[lower_name]
-        return TEAM_CONFIG[canonical]
+        return _apply_logo_colors(team_name, TEAM_CONFIG[canonical], logo_dir)
 
     # Unknown team — auto-assign color and try to find logo
     if team_name not in _auto_color_map:
         idx = len(_auto_color_map) % len(_AUTO_COLORS)
-        logo = _auto_detect_logo(team_name, logo_dir) if logo_dir else None
-        _auto_color_map[team_name] = {
+        base_style = {
             "bar_color": _AUTO_COLORS[idx],
             "text_color": (255, 255, 255),
-            "logo": logo,
+            "logo": _auto_detect_logo(team_name, logo_dir) if logo_dir else None,
         }
+        _auto_color_map[team_name] = _apply_logo_colors(team_name, base_style, logo_dir)
     return _auto_color_map[team_name]

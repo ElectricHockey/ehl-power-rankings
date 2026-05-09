@@ -82,6 +82,31 @@ def _draw_rounded_rect(draw, xy, radius, fill):
     draw.rounded_rectangle(xy, radius=r, fill=fill)
 
 
+def _draw_rounded_gradient(img, xy, radius, left_color, right_color):
+    """Draw a horizontal gradient clipped to a rounded rectangle."""
+    x0, y0, x1, y1 = xy
+    w = max(1, x1 - x0)
+    h = max(1, y1 - y0)
+    r = min(radius, w // 2, h // 2)
+
+    grad = Image.new("RGB", (w, h))
+    px = grad.load()
+    for x in range(w):
+        t = x / (w - 1) if w > 1 else 0.0
+        color = (
+            int(round(left_color[0] + (right_color[0] - left_color[0]) * t)),
+            int(round(left_color[1] + (right_color[1] - left_color[1]) * t)),
+            int(round(left_color[2] + (right_color[2] - left_color[2]) * t)),
+        )
+        for y in range(h):
+            px[x, y] = color
+
+    mask = Image.new("L", (w, h), 0)
+    mask_draw = ImageDraw.Draw(mask)
+    mask_draw.rounded_rectangle((0, 0, w - 1, h - 1), radius=r, fill=255)
+    img.paste(grad, (x0, y0), mask)
+
+
 # Default font sizes – can be overridden via font_overrides parameter
 DEFAULT_FONT_SIZES = {
     "title": 80,
@@ -230,6 +255,7 @@ def generate_rankings_image(
             if rgb:
                 style = dict(style)  # copy to avoid mutating config
                 style["bar_color"] = rgb
+                style.pop("bar_gradient", None)
 
         # Rank box (red rounded rectangle)
         rank_x0, rank_y0 = 10, y + 5
@@ -253,7 +279,15 @@ def generate_rankings_image(
         bar_x0, bar_y0 = BAR_LEFT, y + 5
         bar_x1, bar_y1 = BAR_RIGHT, y + ROW_HEIGHT - 5
         bar_h = bar_y1 - bar_y0
-        _draw_rounded_rect(draw, (bar_x0, bar_y0, bar_x1, bar_y1), 14, style["bar_color"])
+        gradient = style.get("bar_gradient")
+        if (
+            isinstance(gradient, (list, tuple))
+            and len(gradient) == 2
+            and all(isinstance(c, (list, tuple)) and len(c) == 3 for c in gradient)
+        ):
+            _draw_rounded_gradient(img, (bar_x0, bar_y0, bar_x1, bar_y1), 14, gradient[0], gradient[1])
+        else:
+            _draw_rounded_rect(draw, (bar_x0, bar_y0, bar_x1, bar_y1), 14, style["bar_color"])
 
         # Team logo (drawn first so we know the exact reserved space)
         logo_img = _load_team_logo(logo_dir, style.get("logo"), LOGO_SIZE)

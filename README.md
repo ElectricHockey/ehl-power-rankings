@@ -61,6 +61,13 @@ configured in `team_config.py`. Placeholder logos are included; replace them
 with real logos for production use. An `ehl_logo.png` in the same directory is
 used for the header.
 
+Team bar styling now auto-matches logo colors by default:
+
+- The app extracts dominant colors from each team logo.
+- Team bars render with a left→right gradient using those logo colors.
+- Team-name text color (black/white) is auto-selected for contrast.
+- Manual color overrides in the UI still work and force a solid bar color.
+
 ## Project Structure
 
 ```

@@ -281,7 +281,7 @@ def _extract_logo_gradient_style(logo_path):
 
     try:
         img = Image.open(logo_path).convert("RGBA")
-        img.thumbnail((96, 96), Image.Resampling.LANCZOS)
+        img.thumbnail((48, 48), Image.Resampling.LANCZOS)
 
         # Keep only visible-ish pixels to avoid transparent padding bias.
         visible = []

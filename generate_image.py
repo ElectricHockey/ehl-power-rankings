@@ -28,7 +28,7 @@ BG_COLOR = (0, 0, 0)
 RANK_BG = (200, 20, 20)
 RANK_TEXT_COLOR = (255, 255, 255)
 TITLE_COLOR = (255, 215, 0)
-SUBTITLE_COLOR = (255, 215, 0)
+SUBTITLE_COLOR = (255, 255, 255)
 MOVEMENT_COLOR = (255, 255, 255)
 MOVE_UP_COLOR = (0, 200, 0)
 MOVE_DOWN_COLOR = (220, 30, 30)
@@ -84,7 +84,7 @@ def _draw_rounded_rect(draw, xy, radius, fill):
 
 # Default font sizes – can be overridden via font_overrides parameter
 DEFAULT_FONT_SIZES = {
-    "title": 84,
+    "title": 80,
     "subtitle": 52,
     "team": 48,
     "rank": 54,
@@ -311,7 +311,7 @@ def generate_rankings_image(
 
             arrow_h = 14   # arrow triangle height
             arrow_w = 16   # arrow triangle base width
-            gap = 2        # space between arrow and number
+            gap = 4        # space between arrow and number
             total_h = arrow_h + gap + nh
             top_y = row_cy - total_h // 2
 

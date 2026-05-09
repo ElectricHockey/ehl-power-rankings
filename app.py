@@ -135,7 +135,7 @@ def generate():
             if total_teams > 0:
                 flash(
                     f"Found {total_teams} team(s) but none had completed games. "
-                    "Make sure the Status column (column 8) says 'Completed' or 'Forfeit'.",
+                    "Make sure the Status/Result column says 'Completed', 'Complete', 'Final', or 'Forfeit'.",
                     "error",
                 )
             else:

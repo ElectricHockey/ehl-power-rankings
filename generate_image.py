@@ -21,13 +21,14 @@ RANK_BOX_W = 100
 BAR_LEFT = RANK_BOX_W + 6
 BAR_RIGHT = IMG_WIDTH - 60
 LOGO_SIZE = 90
+EHL_LOGO_BOTTOM_MARGIN = 10
 MOVEMENT_X = IMG_WIDTH - 35
 
 BG_COLOR = (0, 0, 0)
 RANK_BG = (200, 20, 20)
 RANK_TEXT_COLOR = (255, 255, 255)
 TITLE_COLOR = (255, 215, 0)
-SUBTITLE_COLOR = (255, 215, 0)
+SUBTITLE_COLOR = (255, 255, 255)
 MOVEMENT_COLOR = (255, 255, 255)
 MOVE_UP_COLOR = (0, 200, 0)
 MOVE_DOWN_COLOR = (220, 30, 30)
@@ -83,7 +84,7 @@ def _draw_rounded_rect(draw, xy, radius, fill):
 
 # Default font sizes – can be overridden via font_overrides parameter
 DEFAULT_FONT_SIZES = {
-    "title": 84,
+    "title": 80,
     "subtitle": 52,
     "team": 48,
     "rank": 54,
@@ -188,9 +189,10 @@ def generate_rankings_image(
     # we must subtract these origin offsets from the draw position.
     ehl_logo = _load_ehl_logo(logo_dir, 130)
     if ehl_logo:
-        logo_y_center = (HEADER_HEIGHT - ehl_logo.height) // 2
-        img.paste(ehl_logo, (20, logo_y_center), ehl_logo)
-        img.paste(ehl_logo, (IMG_WIDTH - 20 - ehl_logo.width, logo_y_center), ehl_logo)
+        # Keep X positions fixed; move logos lower between the title and top rank row.
+        logo_y_position = max(0, HEADER_HEIGHT - ehl_logo.height - EHL_LOGO_BOTTOM_MARGIN)
+        img.paste(ehl_logo, (20, logo_y_position), ehl_logo)
+        img.paste(ehl_logo, (IMG_WIDTH - 20 - ehl_logo.width, logo_y_position), ehl_logo)
 
     title_text = "POWER RANKINGS"
     bbox = draw.textbbox((0, 0), title_text, font=font_title)
@@ -309,7 +311,7 @@ def generate_rankings_image(
 
             arrow_h = 14   # arrow triangle height
             arrow_w = 16   # arrow triangle base width
-            gap = 2        # space between arrow and number
+            gap = 4        # space between arrow and number
             total_h = arrow_h + gap + nh
             top_y = row_cy - total_h // 2
 

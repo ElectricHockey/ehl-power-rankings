@@ -174,7 +174,11 @@ def parse_schedule(csv_text):
                 found.add('away_score')
                 continue
 
-            if c in ('#', 'game', 'game #', 'game number', 'game num', 'match'):
+            if (
+                c in ('#', 'game', 'game #', 'game number', 'game num', 'match')
+                or c.startswith('game ')
+                or ('game' in c and ('time' in c or 'number' in c or 'num' in c))
+            ):
                 inferred['game'] = i
                 found.add('game')
                 continue
@@ -242,8 +246,9 @@ def parse_schedule(csv_text):
         if not first_non_empty:
             continue
 
-        # Game rows start with a game number/time cell.
-        if not _looks_like_game_row(first_non_empty):
+        # Detect game row from the configured game column first, then fallback.
+        game_cell = _get_cell(row, col_idx['game'])
+        if not _looks_like_game_row(game_cell) and not _looks_like_game_row(first_non_empty):
             continue
 
         home_name = _get_cell(row, col_idx['home_name'])

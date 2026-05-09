@@ -115,9 +115,12 @@ def _looks_like_game_row(first_cell):
     # - "1"
     # - "1 8:00 PM"
     # - "24 9:15 PM"
+    # - "001 - 9:00 PM"
     if re.match(r'^\d+$', val):
         return True
     if re.match(r'^\d+\s+\d{1,2}:\d{2}(?:\s*[AP]M)?$', val, re.IGNORECASE):
+        return True
+    if re.match(r'^\d+\s*-\s*\d{1,2}:\d{2}(?:\s*[AP]M)?$', val, re.IGNORECASE):
         return True
     return False
 

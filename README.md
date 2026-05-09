@@ -26,7 +26,7 @@ This writes `power_rankings.png` to the current directory.
 
 ## Custom Fonts and Placement (in code)
 
-Edit `/home/runner/work/ehl-power-rankings/ehl-power-rankings/generate_image.py`:
+Edit `generate_image.py`:
 
 - `DEFAULT_FONT_FILES` to set separate font files for:
   - title

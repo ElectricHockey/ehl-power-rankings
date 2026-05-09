@@ -4,6 +4,8 @@ import tempfile
 
 
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "saved_customizations.json")
+MIN_FONT_SIZE = 10
+MAX_FONT_SIZE = 200
 DEFAULT_CONFIG = {
     "font_sizes": {},
     "team_styles": {},
@@ -21,7 +23,7 @@ def _normalize_font_sizes(font_sizes):
             int_value = int(value)
         except (TypeError, ValueError):
             continue
-        if 10 <= int_value <= 200:
+        if MIN_FONT_SIZE <= int_value <= MAX_FONT_SIZE:
             normalized[str(key)] = int_value
     return normalized
 

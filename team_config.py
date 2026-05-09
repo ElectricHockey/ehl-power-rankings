@@ -7,7 +7,9 @@
 import os
 import re
 import colorsys
+
 from PIL import Image
+
 from config_store import get_saved_team_styles
 
 # Logo palette extraction tuning constants.

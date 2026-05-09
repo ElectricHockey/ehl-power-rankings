@@ -114,9 +114,9 @@ def _draw_rounded_gradient(img, xy, radius, left_color, right_color):
 
     grad = Image.new("RGB", (w, h))
     px = grad.load()
-    gradient_width_minus_one = max(1, w - 1)
+    max_x = max(1, w - 1)
     for x in range(w):
-        t = x / gradient_width_minus_one
+        t = x / max_x
         color = (
             int(round(left_color[0] + (right_color[0] - left_color[0]) * t)),
             int(round(left_color[1] + (right_color[1] - left_color[1]) * t)),

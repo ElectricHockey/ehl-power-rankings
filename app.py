@@ -143,6 +143,7 @@ def _resolve_cached_schedule_path(cache_name):
     path = os.path.join(SCHEDULE_CACHE_DIR, safe_name)
     resolved = os.path.realpath(path)
     try:
+        # commonpath can raise on Windows if paths are on different drives.
         in_cache_dir = os.path.commonpath([resolved, SCHEDULE_CACHE_DIR_REAL]) == SCHEDULE_CACHE_DIR_REAL
     except ValueError:
         return None

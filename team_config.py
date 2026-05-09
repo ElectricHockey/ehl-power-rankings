@@ -22,45 +22,66 @@ def hex_to_rgb(hex_str):
         return None
 
 TEAM_CONFIG = {
-    "Cape Cod Rangers": {
-        "bar_color": (34, 80, 30),       # Dark green
+    # ── Teams with logos ──────────────────────────────────────────────────────
+    "1K Huskies": {
+        "bar_color": (180, 30, 30),       # Red
         "text_color": (255, 255, 255),
-        "logo": "cape_cod_rangers.png",
+        "logo": "1k_huskies.png",
     },
-    "Sabres on Ice": {
-        "bar_color": (135, 180, 210),     # Light blue
-        "text_color": (0, 0, 0),
-        "logo": "sabres_on_ice.png",
-    },
-    "Hope Skate Park": {
-        "bar_color": (100, 110, 120),     # Slate gray
+    "Blood Sweat N Beers": {
+        "bar_color": (120, 20, 20),       # Dark red
         "text_color": (255, 255, 255),
-        "logo": "hope_skate_park.png",
-    },
-    "Montrescotia Buffaloes": {
-        "bar_color": (100, 40, 130),      # Purple
-        "text_color": (255, 255, 255),
-        "logo": "montrescotia_buffaloes.png",
+        "logo": "blood_sweat_n_beers.png",
     },
     "Canadian Frostbytes": {
         "bar_color": (0, 210, 255),       # Cyan
         "text_color": (0, 0, 0),
         "logo": "canadian_frostbytes.png",
     },
-    "Tombstone": {
-        "bar_color": (90, 30, 70),        # Dark purple/maroon
+    "Cape Cod Rangers": {
+        "bar_color": (34, 80, 30),        # Dark green
         "text_color": (255, 255, 255),
-        "logo": "tombstone.png",
+        "logo": "cape_cod_rangers.png",
     },
-    "Steel City Legion": {
-        "bar_color": (30, 100, 200),      # Blue
+    "Chemistry Bros": {
+        "bar_color": (40, 130, 60),       # Green
         "text_color": (255, 255, 255),
-        "logo": "steel_city_legion.png",
+        "logo": "chemistry_bros.png",
     },
-    "Pouch Munchers": {
-        "bar_color": (180, 40, 50),       # Crimson red
+    "Cooper Gang HC": {
+        "bar_color": (30, 50, 160),       # Dark blue
         "text_color": (255, 255, 255),
-        "logo": "pouch_munchers.png",
+        "logo": "cooper_gang_hc.png",
+    },
+    "Greensboro Hurricanes": {
+        "bar_color": (0, 140, 120),       # Teal
+        "text_color": (255, 255, 255),
+        "logo": "greensboro_hurricanes.png",
+    },
+    "High Quality Plague": {
+        "bar_color": (60, 20, 90),        # Dark purple
+        "text_color": (255, 255, 255),
+        "logo": "high_quality_plague.png",
+    },
+    "Hope Skate Park": {
+        "bar_color": (100, 110, 120),     # Slate gray
+        "text_color": (255, 255, 255),
+        "logo": "hope_skate_park.png",
+    },
+    "II AURA II": {
+        "bar_color": (100, 30, 140),      # Purple
+        "text_color": (220, 180, 0),      # Gold text
+        "logo": "ii_aura_ii.png",
+    },
+    "Kala Singhs": {
+        "bar_color": (20, 40, 120),       # Dark blue
+        "text_color": (255, 200, 0),      # Gold text
+        "logo": "kala_singhs.png",
+    },
+    "Kitty Slayers": {
+        "bar_color": (50, 50, 50),        # Dark gray
+        "text_color": (255, 255, 255),
+        "logo": "kitty_slayers.png",
     },
     "MN Blues": {
         "bar_color": (20, 30, 120),       # Navy blue
@@ -71,6 +92,66 @@ TEAM_CONFIG = {
         "bar_color": (20, 70, 30),        # Dark green
         "text_color": (255, 255, 255),
         "logo": "minnesota_wild.png",
+    },
+    "Montrescotia Buffaloes": {
+        "bar_color": (100, 40, 130),      # Purple
+        "text_color": (255, 255, 255),
+        "logo": "montrescotia_buffaloes.png",
+    },
+    "North Dakota": {
+        "bar_color": (0, 40, 100),        # Dark navy (UND colors)
+        "text_color": (255, 255, 255),
+        "logo": "north_dakota.png",
+    },
+    "Oak Gable Goons": {
+        "bar_color": (60, 90, 40),        # Forest green
+        "text_color": (255, 255, 255),
+        "logo": "oak_gable_goons.png",
+    },
+    "Pioneers": {
+        "bar_color": (30, 60, 140),       # Blue
+        "text_color": (220, 180, 0),      # Gold text
+        "logo": "pioneers.png",
+    },
+    "Pouch Munchers": {
+        "bar_color": (180, 40, 50),       # Crimson red
+        "text_color": (255, 255, 255),
+        "logo": "pouch_munchers.png",
+    },
+    "Puckin Around": {
+        "bar_color": (200, 100, 20),      # Orange
+        "text_color": (255, 255, 255),
+        "logo": "puckin_around.png",
+    },
+    "Reverse HC": {
+        "bar_color": (20, 20, 20),        # Black
+        "text_color": (255, 255, 255),
+        "logo": "reverse_hc.png",
+    },
+    "Royal Deltz": {
+        "bar_color": (80, 20, 140),       # Royal purple
+        "text_color": (220, 180, 0),      # Gold text
+        "logo": "royal_deltz.png",
+    },
+    "Sabres on Ice": {
+        "bar_color": (135, 180, 210),     # Light blue
+        "text_color": (0, 0, 0),
+        "logo": "sabres_on_ice.png",
+    },
+    "Steel City Legion": {
+        "bar_color": (30, 100, 200),      # Blue
+        "text_color": (255, 255, 255),
+        "logo": "steel_city_legion.png",
+    },
+    "Stratton Oakmont": {
+        "bar_color": (10, 30, 80),        # Navy blue
+        "text_color": (220, 180, 0),      # Gold text
+        "logo": "stratton_oakmont.png",
+    },
+    "Tombstone": {
+        "bar_color": (90, 30, 70),        # Dark purple/maroon
+        "text_color": (255, 255, 255),
+        "logo": "tombstone.png",
     },
 }
 

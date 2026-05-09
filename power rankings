@@ -509,6 +509,74 @@ def print_movement(season_rankings, weekly_rankings):
 # WEEK HELPERS
 # ============================================================
 
+# Maps day-name strings to weekday numbers (Monday=0 … Sunday=6).
+_WEEKDAY_MAP = {
+    'monday': 0, 'tuesday': 1, 'wednesday': 2, 'thursday': 3,
+    'friday': 4, 'saturday': 5, 'sunday': 6,
+    'mon': 0, 'tue': 1, 'wed': 2, 'thu': 3, 'fri': 4, 'sat': 5, 'sun': 6,
+}
+
+
+def _extract_weekday_num(first_cell):
+    """Return weekday number (0=Mon…6=Sun) if *first_cell* starts with a day
+    name, otherwise return None."""
+    word = re.split(r'[\s,]+', (first_cell or '').strip().lower())
+    return _WEEKDAY_MAP.get(word[0]) if word else None
+
+
+def _group_date_rows_by_calendar_week(csv_text):
+    """Group date-header line indices into calendar (Mon–Sun) weeks.
+
+    Returns a list of lists of line indices.  Each inner list contains all
+    date-header row indices that fall in the same Monday–Sunday calendar week.
+
+    Week boundaries are detected by observing when the weekday number
+    decreases or stays the same compared to the previous game-day row (e.g.
+    a Monday after a Friday means a new week has started).
+
+    If none of the date-header rows contain a recognisable weekday name the
+    function returns an empty list so the caller can fall back to the
+    legacy ``days_per_week`` heuristic.
+    """
+    lines = csv_text.strip().split('\n')
+    date_indices = _find_date_row_indices(csv_text)
+    if not date_indices:
+        return []
+
+    weeks = []
+    current_week = []
+    prev_weekday = None
+    found_any = False
+
+    for i in date_indices:
+        line = lines[i] if i < len(lines) else ''
+        try:
+            row = next(csv.reader([line.strip()]))
+        except (StopIteration, csv.Error):
+            row = [line.strip()]
+        first_cell = row[0].strip() if row else ''
+        weekday = _extract_weekday_num(first_cell)
+
+        if weekday is not None:
+            found_any = True
+            if prev_weekday is not None and weekday <= prev_weekday:
+                # Weekday went backwards (or repeated) → new calendar week
+                if current_week:
+                    weeks.append(current_week)
+                current_week = [i]
+            else:
+                current_week.append(i)
+            prev_weekday = weekday
+        else:
+            # Day name not recognised → fold into the current week
+            current_week.append(i)
+
+    if current_week:
+        weeks.append(current_week)
+
+    # Return [] to signal "no calendar info found" so caller falls back
+    return weeks if found_any else []
+
 
 def _find_date_row_indices(csv_text):
     """Find the line indices of week-boundary rows in the CSV text.
@@ -565,10 +633,13 @@ def _find_date_row_indices(csv_text):
 def count_weeks(csv_text, days_per_week=1):
     """Count the number of weeks in the schedule.
 
-    *days_per_week* is how many date-header rows (game-days) make up one
-    week.  For example if there are 6 date rows and ``days_per_week=3``,
-    the schedule contains 2 weeks.
+    When date-header rows contain weekday names the count is determined by
+    calendar week grouping (Mon–Sun).  Otherwise the legacy heuristic of
+    dividing date-header rows by *days_per_week* is used.
     """
+    week_groups = _group_date_rows_by_calendar_week(csv_text)
+    if week_groups:
+        return len(week_groups)
     n_dates = len(_find_date_row_indices(csv_text))
     dpw = max(1, days_per_week)
     return n_dates // dpw
@@ -577,9 +648,10 @@ def count_weeks(csv_text, days_per_week=1):
 def schedule_up_to_week(csv_text, max_week, days_per_week=1):
     """Return CSV text containing only games from weeks 1 through *max_week*.
 
-    *days_per_week* is how many date-header rows (game-days) make up one
-    week.  The function includes all rows up to the date-header row at
-    index ``max_week * days_per_week``.
+    When date-header rows contain weekday names (e.g. "Monday January 6")
+    week boundaries are determined automatically by calendar week (Monday–
+    Sunday).  Otherwise the legacy *days_per_week* heuristic is used as a
+    fallback.
     """
     lines = csv_text.strip().split('\n')
     date_indices = _find_date_row_indices(csv_text)
@@ -587,16 +659,22 @@ def schedule_up_to_week(csv_text, max_week, days_per_week=1):
     if not date_indices or max_week < 1:
         return csv_text
 
-    dpw = max(1, days_per_week)
-    # Number of date-rows to include: week N means first N*dpw date sections
-    max_date_rows = max_week * dpw
-    max_date_rows = min(max_date_rows, len(date_indices))
+    # ── Calendar-week grouping (preferred) ──────────────────────
+    week_groups = _group_date_rows_by_calendar_week(csv_text)
+    if week_groups:
+        if max_week >= len(week_groups):
+            return csv_text  # All weeks are included
+        # Cut at the first line of the next calendar week
+        end_idx = min(week_groups[max_week])
+        return '\n'.join(lines[:end_idx])
 
+    # ── Legacy fallback: days_per_week heuristic ─────────────────
+    dpw = max(1, days_per_week)
+    max_date_rows = min(max_week * dpw, len(date_indices))
     if max_date_rows < len(date_indices):
         end_idx = date_indices[max_date_rows]
     else:
         end_idx = len(lines)
-
     return '\n'.join(lines[:end_idx])
 
 

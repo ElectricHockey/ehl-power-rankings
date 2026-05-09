@@ -90,10 +90,13 @@ DEFAULT_FONT_SIZES = {
 }
 
 # Default font files (edit these in code to change typefaces independently)
+# Place Paladins.ttf (and any other custom .ttf) in the fonts/ directory.
+# _load_font() checks fonts/ first and falls back to the bundled Lato fonts
+# if the requested file is not found.
 DEFAULT_FONT_FILES = {
-    "title": "Lato-Black.ttf",
-    "subtitle": "Lato-BoldItalic.ttf",
-    "team": "Lato-Heavy.ttf",
+    "title": "Paladins.ttf",
+    "subtitle": "Paladins.ttf",
+    "team": "Paladins.ttf",
     "rank": "Lato-Black.ttf",
     "movement": "Lato-Bold.ttf",
 }

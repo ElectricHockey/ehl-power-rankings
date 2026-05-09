@@ -89,6 +89,25 @@ DEFAULT_FONT_SIZES = {
     "rank": 54,
 }
 
+# Default font files (edit these in code to change typefaces independently)
+DEFAULT_FONT_FILES = {
+    "title": "Lato-Black.ttf",
+    "subtitle": "Lato-BoldItalic.ttf",
+    "team": "Lato-Heavy.ttf",
+    "rank": "Lato-Black.ttf",
+    "movement": "Lato-Bold.ttf",
+}
+
+# Per-text placement offsets (edit these in code for independent positioning)
+TEXT_POSITION_OFFSETS = {
+    "title_x": 0,
+    "title_y": 0,
+    "subtitle_x": 0,
+    "subtitle_y": 0,
+    "team_x": 0,
+    "team_y": 0,
+}
+
 
 def generate_rankings_image(
     ranked_teams,
@@ -126,6 +145,11 @@ def generate_rankings_image(
     movement : dict or None
         Optional {team_name: int} where positive = moved up, negative = down,
         0 = unchanged, None = new team.  Omit for no arrows.
+
+    Note
+    ----
+    To change typefaces and placement in code, edit DEFAULT_FONT_FILES and
+    TEXT_POSITION_OFFSETS near the top of this file.
     """
     if color_overrides is None:
         color_overrides = {}
@@ -149,11 +173,11 @@ def generate_rankings_image(
     draw = ImageDraw.Draw(img)
 
     # ── Fonts ───────────────────────────────────────────────
-    font_title = _load_font("Lato-Black.ttf", font_sizes["title"])
-    font_subtitle = _load_font("Lato-BoldItalic.ttf", font_sizes["subtitle"])
-    font_rank = _load_font("Lato-Black.ttf", font_sizes["rank"])
-    font_team = _load_font("Lato-Heavy.ttf", font_sizes["team"])
-    font_move = _load_font("Lato-Bold.ttf", 32)
+    font_title = _load_font(DEFAULT_FONT_FILES["title"], font_sizes["title"])
+    font_subtitle = _load_font(DEFAULT_FONT_FILES["subtitle"], font_sizes["subtitle"])
+    font_rank = _load_font(DEFAULT_FONT_FILES["rank"], font_sizes["rank"])
+    font_team = _load_font(DEFAULT_FONT_FILES["team"], font_sizes["team"])
+    font_move = _load_font(DEFAULT_FONT_FILES["movement"], 32)
 
     # ── Header ──────────────────────────────────────────────
     # NOTE: PIL textbbox((0,0), text) returns (x0, y0, x1, y1) where y0 is
@@ -172,6 +196,8 @@ def generate_rankings_image(
     # Center the title in the top portion of the header (account for bbox origin)
     title_x = (IMG_WIDTH - tw) // 2 - bbox[0]
     title_y = (HEADER_HEIGHT // 2 - th) // 2 - bbox[1]
+    title_x += TEXT_POSITION_OFFSETS["title_x"]
+    title_y += TEXT_POSITION_OFFSETS["title_y"]
     draw.text((title_x, title_y), title_text, fill=TITLE_COLOR, font=font_title)
 
     sub_text = f"{division_label} {week_label}"
@@ -181,6 +207,8 @@ def generate_rankings_image(
     # Center the subtitle in the bottom portion of the header (account for bbox origin)
     sub_x = (IMG_WIDTH - sw) // 2 - bbox[0]
     sub_y = HEADER_HEIGHT // 2 + (HEADER_HEIGHT // 2 - sh) // 2 - bbox[1]
+    sub_x += TEXT_POSITION_OFFSETS["subtitle_x"]
+    sub_y += TEXT_POSITION_OFFSETS["subtitle_y"]
     draw.text((sub_x, sub_y), sub_text, fill=SUBTITLE_COLOR, font=font_subtitle)
 
     # ── Team rows ───────────────────────────────────────────
@@ -245,13 +273,15 @@ def generate_rankings_image(
             shrunk_size = font_sizes["team"]
             while nw > text_area_w and shrunk_size > 16:
                 shrunk_size -= 2
-                actual_font = _load_font("Lato-Heavy.ttf", shrunk_size)
+                actual_font = _load_font(DEFAULT_FONT_FILES["team"], shrunk_size)
                 nb = draw.textbbox((0, 0), name_upper, font=actual_font)
                 nw = nb[2] - nb[0]
                 nh = nb[3] - nb[1]
 
         text_x = text_left + (text_area_w - nw) // 2 - nb[0]
         text_y = bar_y0 + (bar_h - nh) // 2 - nb[1]
+        text_x += TEXT_POSITION_OFFSETS["team_x"]
+        text_y += TEXT_POSITION_OFFSETS["team_y"]
         draw.text((text_x, text_y), name_upper, fill=style["text_color"], font=actual_font)
 
         # Movement indicator: drawn arrow + number, or "–" for no change

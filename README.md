@@ -24,6 +24,19 @@ python generate_image.py schedule.csv --week "WEEK 3" --div "3'S"
 
 This writes `power_rankings.png` to the current directory.
 
+## Custom Fonts and Placement (in code)
+
+Edit `/home/runner/work/ehl-power-rankings/ehl-power-rankings/generate_image.py`:
+
+- `DEFAULT_FONT_FILES` to set separate font files for:
+  - title
+  - subtitle/week line
+  - team names
+- `TEXT_POSITION_OFFSETS` to adjust placement independently:
+  - `title_x`, `title_y`
+  - `subtitle_x`, `subtitle_y`
+  - `team_x`, `team_y`
+
 ## Schedule Format
 
 The schedule file (.xlsx or .csv) supports header-based parsing and works with

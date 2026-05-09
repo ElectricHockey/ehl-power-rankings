@@ -127,7 +127,9 @@ def generate():
             with open(saved_path, "r", encoding="utf-8") as f:
                 csv_text = f.read()
 
-        teams = engine.parse_schedule(csv_text)
+        week_num = _parse_week_number(week_label)
+        rankings_csv = engine.schedule_up_to_week(csv_text, week_num, days_per_week)
+        teams = engine.parse_schedule(rankings_csv)
         rankings = engine.calculate_power_scores(teams)
 
         if not rankings:
@@ -166,7 +168,6 @@ def generate():
 
     # ── Compute movement arrows ─────────────────────────────
     # Use the week number from the user's label (e.g. "WEEK 2" → 2)
-    week_num = _parse_week_number(week_label)
     detected_weeks = engine.count_weeks(csv_text, days_per_week)
     movement = engine.compute_movement(csv_text, week_num, days_per_week)
 
@@ -302,7 +303,9 @@ def regenerate():
 
     # ── Re-run the rankings engine ──────────────────────────
     try:
-        teams = engine.parse_schedule(csv_text)
+        week_num = _parse_week_number(week_label)
+        rankings_csv = engine.schedule_up_to_week(csv_text, week_num, days_per_week)
+        teams = engine.parse_schedule(rankings_csv)
         rankings = engine.calculate_power_scores(teams)
     except Exception as exc:
         flash(f"Error processing schedule: {exc}", "error")
@@ -313,7 +316,6 @@ def regenerate():
         return redirect(url_for("index"))
 
     # ── Compute movement arrows ─────────────────────────────
-    week_num = _parse_week_number(week_label)
     detected_weeks = engine.count_weeks(csv_text, days_per_week)
     movement = engine.compute_movement(csv_text, week_num, days_per_week)
 

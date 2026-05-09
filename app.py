@@ -91,19 +91,6 @@ def _normalize_hex_color(value):
     return None
 
 
-def _collect_solid_color_overrides(form):
-    """Extract solid team color overrides from form data."""
-    overrides = {}
-    team_names = form.getlist("team_name[]")
-    team_colors = form.getlist("team_color[]")
-    for name, color in zip(team_names, team_colors):
-        name = name.strip()
-        normalized = _normalize_hex_color(color)
-        if name and normalized:
-            overrides[name] = normalized
-    return overrides
-
-
 def _collect_gradient_overrides(form):
     """Extract gradient team color overrides from form data."""
     overrides = {}
@@ -168,9 +155,8 @@ def _rgb_to_hex(rgb):
     return "#{:02x}{:02x}{:02x}".format(*rgb)
 
 
-def _build_team_colors(rankings, solid_overrides=None, gradient_overrides=None, text_mode_overrides=None):
+def _build_team_colors(rankings, gradient_overrides=None, text_mode_overrides=None):
     """Build color-control data for the results template."""
-    solid_overrides = solid_overrides or {}
     gradient_overrides = gradient_overrides or {}
     text_mode_overrides = text_mode_overrides or {}
 
@@ -182,10 +168,6 @@ def _build_team_colors(rankings, solid_overrides=None, gradient_overrides=None, 
         end_hex = _rgb_to_hex(gradient[1])
         text_mode = style.get("text_mode", "auto")
 
-        if team.name in solid_overrides:
-            solid_hex = solid_overrides[team.name]
-            start_hex = solid_hex
-            end_hex = solid_hex
         if team.name in gradient_overrides:
             start_hex, end_hex = gradient_overrides[team.name]
         if team.name in text_mode_overrides:
@@ -255,9 +237,6 @@ def generate():
 
     # ── Collect font size overrides ─────────────────────────
     active_font_sizes = _build_active_font_sizes(request.form)
-
-    # ── Collect team color overrides ────────────────────────
-    color_overrides = _collect_solid_color_overrides(request.form)
 
     # ── Save uploaded file ──────────────────────────────────
     ext = ".xlsx" if fname_lower.endswith(".xlsx") else ".csv"
@@ -344,7 +323,6 @@ def generate():
         logo_dir=LOGO_DIR,
         output_path=out_path,
         top_n=10,
-        color_overrides=color_overrides,
         gradient_overrides=None,
         font_overrides=active_font_sizes,
         movement=movement,
@@ -366,7 +344,7 @@ def generate():
             "streak": streak,
         })
 
-    team_colors = _build_team_colors(rankings, solid_overrides=color_overrides)
+    team_colors = _build_team_colors(rankings)
 
     return render_template(
         "results.html",
@@ -426,7 +404,6 @@ def regenerate():
         return redirect(url_for("index"))
 
     # ── Collect team color overrides ────────────────────────
-    color_overrides = _collect_solid_color_overrides(request.form)
     gradient_overrides = _collect_gradient_overrides(request.form)
     text_mode_overrides = _collect_text_mode_overrides(request.form)
 
@@ -473,7 +450,6 @@ def regenerate():
         logo_dir=LOGO_DIR,
         output_path=out_path,
         top_n=10,
-        color_overrides=color_overrides,
         gradient_overrides=gradient_overrides,
         text_mode_overrides=text_mode_overrides,
         font_overrides=active_font_sizes,
@@ -498,7 +474,6 @@ def regenerate():
 
     team_colors = _build_team_colors(
         rankings,
-        solid_overrides=color_overrides,
         gradient_overrides=gradient_overrides,
         text_mode_overrides=text_mode_overrides,
     )

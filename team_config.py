@@ -13,7 +13,7 @@ from config_store import get_saved_team_styles
 # Logo palette extraction tuning constants.
 LOGO_SAMPLE_SIZE = 64  # Small sample is enough for palette extraction while staying fast.
 ALPHA_VISIBILITY_THRESHOLD = 40  # Ignore nearly transparent padding/background pixels.
-LOGO_PALETTE_SIZE = 10  # Keep enough palette entries to capture multi-color logos.
+QUANTIZE_COLOR_COUNT = 10  # Keep enough quantized colors to capture multi-color logos.
 LOGO_QUANTIZE_METHOD = Image.Quantize.MEDIANCUT
 MIN_COLOR_DISTANCE = 50  # Require visible separation between primary and secondary colors.
 DARK_COLOR_BLEND_RATIO = 0.30  # Lighten dark one-color logos for a usable two-tone gradient.
@@ -337,13 +337,13 @@ def _extract_logo_gradient_style(logo_path):
         # Reduce to representative palette; keeps dominant logo colors.
         palette_img = Image.new("RGB", (len(visible), 1))
         palette_img.putdata(visible)
-        pal = palette_img.quantize(colors=LOGO_PALETTE_SIZE, method=LOGO_QUANTIZE_METHOD)
+        pal = palette_img.quantize(colors=QUANTIZE_COLOR_COUNT, method=LOGO_QUANTIZE_METHOD)
         rgb_pal = pal.convert("RGB")
         counts = rgb_pal.getcolors(maxcolors=256) or []
         if not counts:
             _logo_style_cache[logo_path] = None
             return None
-        counts.sort(key=lambda x: x[0], reverse=True)
+        counts.sort(key=lambda count_color: count_color[0], reverse=True)
         colors = [c for _n, c in counts]
 
         brand_colors = [c for c in colors if _is_brand_color(c)]

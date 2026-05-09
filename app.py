@@ -141,8 +141,8 @@ def generate():
             else:
                 flash(
                     "No teams or games found in the file. "
-                    "Expected columns: Game#, Home, HomeScore, AwayScore, Away, …, …, Status. "
-                    "Rows must start with a number (game #).",
+                    "Expected columns include Home Team, Away Team, Home Score, Away Score, and Status "
+                    "(plus optional Game#/Time and OT columns).",
                     "error",
                 )
             if os.path.exists(saved_path):

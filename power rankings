@@ -246,14 +246,22 @@ def parse_schedule(csv_text):
         if not first_non_empty:
             continue
 
-        # Detect game row from the configured game column first, then fallback.
-        game_cell = _get_cell(row, col_idx['game'])
-        if not _looks_like_game_row(game_cell) and not _looks_like_game_row(first_non_empty):
-            continue
-
         home_name = _get_cell(row, col_idx['home_name'])
         away_name = _get_cell(row, col_idx['away_name'])
+        home_score_raw = _get_cell(row, col_idx['home_score'])
+        away_score_raw = _get_cell(row, col_idx['away_score'])
         status = _get_cell(row, col_idx['status'])
+
+        # Primary row detection:
+        # 1) classic game-number row OR
+        # 2) schedules without game-number column but with teams + scores present.
+        game_cell = _get_cell(row, col_idx['game'])
+        has_game_marker = (
+            _looks_like_game_row(game_cell) or _looks_like_game_row(first_non_empty)
+        )
+        has_core_game_fields = bool(home_name and away_name and home_score_raw and away_score_raw)
+        if not has_game_marker and not has_core_game_fields:
+            continue
 
         status_norm = status.lower()
 
@@ -263,10 +271,6 @@ def parse_schedule(csv_text):
 
         home_team = get_team(home_name)
         away_team = get_team(away_name)
-
-        # Parse scores
-        home_score_raw = _get_cell(row, col_idx['home_score'])
-        away_score_raw = _get_cell(row, col_idx['away_score'])
 
         # Check OT marker column (if present)
         is_ot = False

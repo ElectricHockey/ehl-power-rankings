@@ -45,6 +45,7 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", os.urandom(24).hex())
 UPLOAD_DIR = os.path.join(tempfile.gettempdir(), "ehl_uploads")
 OUTPUT_DIR = os.path.join(tempfile.gettempdir(), "ehl_outputs")
 SCHEDULE_CACHE_DIR = os.path.join(tempfile.gettempdir(), "ehl_schedule_cache")
+SCHEDULE_CACHE_DIR_REAL = os.path.realpath(SCHEDULE_CACHE_DIR)
 LOGO_DIR = os.path.join(os.path.dirname(__file__), "logos")
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -141,7 +142,7 @@ def _resolve_cached_schedule_path(cache_name):
     safe_name = os.path.basename(cache_name)
     path = os.path.join(SCHEDULE_CACHE_DIR, safe_name)
     resolved = os.path.realpath(path)
-    if not resolved.startswith(os.path.realpath(SCHEDULE_CACHE_DIR)):
+    if not resolved.startswith(SCHEDULE_CACHE_DIR_REAL):
         return None
     return resolved
 

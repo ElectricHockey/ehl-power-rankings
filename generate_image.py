@@ -98,6 +98,8 @@ def _contrast_text_color(bg_rgb):
 def _draw_rounded_gradient(img, xy, radius, left_color, right_color):
     """Draw a horizontal gradient clipped to a rounded rectangle."""
     x0, y0, x1, y1 = xy
+    if x1 <= x0 or y1 <= y0:
+        return
     w = max(1, x1 - x0)
     h = max(1, y1 - y0)
     r = min(radius, w // 2, h // 2)

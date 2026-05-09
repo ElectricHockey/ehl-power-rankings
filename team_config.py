@@ -8,6 +8,7 @@ import os
 import re
 import colorsys
 from PIL import Image
+from config_store import get_saved_team_styles
 
 # Logo palette extraction tuning constants.
 LOGO_SAMPLE_SIZE = 64  # Small sample is enough for palette extraction while staying fast.
@@ -23,6 +24,8 @@ MIN_SATURATION_FOR_NON_NEUTRAL = 0.16  # Fallback filter when a logo is less sat
 MIN_LUMINANCE_FOR_BRAND_COLOR = 0.08  # Skip near-black background tones when possible.
 MAX_LUMINANCE_FOR_BRAND_COLOR = 0.94  # Skip near-white highlight/background tones when possible.
 LUMINANCE_THRESHOLD_FOR_SECONDARY_BLEND = 0.5  # Decide whether synthetic secondary should lighten or darken.
+WHITE_RGB = (255, 255, 255)
+BLACK_RGB = (0, 0, 0)
 
 
 def hex_to_rgb(hex_str):
@@ -175,7 +178,7 @@ TEAM_CONFIG = {
 # Default style for teams not in the config
 DEFAULT_TEAM_STYLE = {
     "bar_color": (80, 80, 80),
-    "text_color": (255, 255, 255),
+    "text_color": WHITE_RGB,
     "logo": None,
 }
 
@@ -286,7 +289,7 @@ def _relative_luminance(rgb):
 
 def _contrast_text_color(bg_rgb):
     """Return black or white based on background luminance."""
-    return (0, 0, 0) if _relative_luminance(bg_rgb) >= LUMINANCE_THRESHOLD_FOR_BLACK_TEXT else (255, 255, 255)
+    return BLACK_RGB if _relative_luminance(bg_rgb) >= LUMINANCE_THRESHOLD_FOR_BLACK_TEXT else WHITE_RGB
 
 
 def _color_metrics(rgb):
@@ -362,9 +365,9 @@ def _extract_logo_gradient_style(logo_path):
             # Create a subtle two-tone gradient if logo is mostly one color.
             lum = _relative_luminance(primary)
             if lum < LUMINANCE_THRESHOLD_FOR_SECONDARY_BLEND:
-                secondary = _mix_rgb(primary, (255, 255, 255), DARK_COLOR_BLEND_RATIO)
+                secondary = _mix_rgb(primary, WHITE_RGB, DARK_COLOR_BLEND_RATIO)
             else:
-                secondary = _mix_rgb(primary, (0, 0, 0), LIGHT_COLOR_BLEND_RATIO)
+                secondary = _mix_rgb(primary, BLACK_RGB, LIGHT_COLOR_BLEND_RATIO)
 
         mid = _mix_rgb(primary, secondary, 0.5)
         style = {
@@ -389,16 +392,51 @@ def _apply_logo_colors(team_name, style, logo_dir):
     if logo_file:
         out["logo"] = logo_file
     if not logo_dir or not logo_file:
-        return out
+        return _apply_saved_style_overrides(team_name, out)
 
     logo_path = os.path.join(logo_dir, logo_file)
     if not os.path.isfile(logo_path):
-        return out
+        return _apply_saved_style_overrides(team_name, out)
 
     derived = _extract_logo_gradient_style(logo_path)
     if not derived:
-        return out
+        return _apply_saved_style_overrides(team_name, out)
     out.update(derived)
+    return _apply_saved_style_overrides(team_name, out)
+
+
+def _apply_saved_style_overrides(team_name, style):
+    """Apply saved repo-backed overrides for bar gradient and text mode."""
+    overrides = get_saved_team_styles()
+    saved = overrides.get(team_name)
+    if not saved:
+        lower_name = team_name.lower()
+        for saved_name, saved_style in overrides.items():
+            if saved_name.lower() == lower_name:
+                saved = saved_style
+                break
+    if not saved:
+        return style
+
+    out = dict(style)
+    start_rgb = hex_to_rgb(saved.get("color_start"))
+    end_rgb = hex_to_rgb(saved.get("color_end"))
+    if start_rgb and end_rgb:
+        out["bar_color"] = start_rgb
+        out["bar_gradient"] = (start_rgb, end_rgb)
+
+    text_mode = str(saved.get("text_mode", "auto")).strip().lower()
+    if text_mode == "light":
+        out["text_color"] = WHITE_RGB
+        out["text_mode"] = "light"
+    elif text_mode == "dark":
+        out["text_color"] = BLACK_RGB
+        out["text_mode"] = "dark"
+    else:
+        gradient = out.get("bar_gradient")
+        sample_bg = _mix_rgb(gradient[0], gradient[1], 0.5) if gradient else out["bar_color"]
+        out["text_color"] = _contrast_text_color(sample_bg)
+        out["text_mode"] = "auto"
     return out
 
 
@@ -421,7 +459,7 @@ def get_team_style(team_name, logo_dir=None):
         idx = len(_auto_color_map) % len(_AUTO_COLORS)
         base_style = {
             "bar_color": _AUTO_COLORS[idx],
-            "text_color": (255, 255, 255),
+            "text_color": WHITE_RGB,
             "logo": _auto_detect_logo(team_name, logo_dir) if logo_dir else None,
         }
         _auto_color_map[team_name] = _apply_logo_colors(team_name, base_style, logo_dir)

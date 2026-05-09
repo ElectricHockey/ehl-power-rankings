@@ -16,6 +16,7 @@ from flask import Flask, render_template, request, send_file, redirect, url_for,
 
 from generate_image import generate_rankings_image, DEFAULT_FONT_SIZES
 from team_config import get_team_style
+from config_store import get_saved_font_sizes, save_saved_customizations
 
 # ── Import the ranking engine from the file named "power rankings" ──
 _engine_path = os.path.join(os.path.dirname(__file__), "power rankings")
@@ -65,6 +66,18 @@ def _collect_font_overrides(form):
                     overrides[key] = val
             except (ValueError, TypeError):
                 pass
+    return overrides
+
+
+def _collect_text_mode_overrides(form):
+    """Extract per-team text mode overrides from form data."""
+    overrides = {}
+    team_names = form.getlist("team_name[]")
+    text_modes = form.getlist("team_text_mode[]")
+    for name, text_mode in zip(team_names, text_modes):
+        normalized = str(text_mode or "auto").strip().lower()
+        if name.strip() and normalized in {"auto", "light", "dark"}:
+            overrides[name.strip()] = normalized
     return overrides
 
 
@@ -155,10 +168,11 @@ def _rgb_to_hex(rgb):
     return "#{:02x}{:02x}{:02x}".format(*rgb)
 
 
-def _build_team_colors(rankings, solid_overrides=None, gradient_overrides=None):
+def _build_team_colors(rankings, solid_overrides=None, gradient_overrides=None, text_mode_overrides=None):
     """Build color-control data for the results template."""
     solid_overrides = solid_overrides or {}
     gradient_overrides = gradient_overrides or {}
+    text_mode_overrides = text_mode_overrides or {}
 
     team_colors = []
     for team, _score, _bd in rankings:
@@ -166,6 +180,7 @@ def _build_team_colors(rankings, solid_overrides=None, gradient_overrides=None):
         gradient = style.get("bar_gradient") or (style["bar_color"], style["bar_color"])
         start_hex = _rgb_to_hex(gradient[0])
         end_hex = _rgb_to_hex(gradient[1])
+        text_mode = style.get("text_mode", "auto")
 
         if team.name in solid_overrides:
             solid_hex = solid_overrides[team.name]
@@ -173,13 +188,38 @@ def _build_team_colors(rankings, solid_overrides=None, gradient_overrides=None):
             end_hex = solid_hex
         if team.name in gradient_overrides:
             start_hex, end_hex = gradient_overrides[team.name]
+        if team.name in text_mode_overrides:
+            text_mode = text_mode_overrides[team.name]
 
         team_colors.append({
             "name": team.name,
             "color_start": start_hex,
             "color_end": end_hex,
+            "text_mode": text_mode,
         })
     return team_colors
+
+
+def _build_active_font_sizes(form=None):
+    """Merge default font sizes with saved settings and current form values."""
+    active = dict(DEFAULT_FONT_SIZES)
+    active.update(get_saved_font_sizes())
+    if form is not None:
+        active.update(_collect_font_overrides(form))
+    return active
+
+
+def _persist_customizations(team_colors, font_sizes):
+    """Save current team styles and font sizes into the repo-backed config file."""
+    team_styles = {
+        item["name"]: {
+            "color_start": item["color_start"],
+            "color_end": item["color_end"],
+            "text_mode": item["text_mode"],
+        }
+        for item in team_colors
+    }
+    save_saved_customizations(font_sizes=font_sizes, team_styles=team_styles)
 
 
 @app.route("/", methods=["GET"])
@@ -214,7 +254,7 @@ def generate():
         days_per_week = 1
 
     # ── Collect font size overrides ─────────────────────────
-    font_overrides = _collect_font_overrides(request.form)
+    active_font_sizes = _build_active_font_sizes(request.form)
 
     # ── Collect team color overrides ────────────────────────
     color_overrides = _collect_solid_color_overrides(request.form)
@@ -297,9 +337,6 @@ def generate():
     out_path = os.path.join(OUTPUT_DIR, out_filename)
 
     # Merge font overrides with defaults for the actual sizes used
-    active_font_sizes = dict(DEFAULT_FONT_SIZES)
-    active_font_sizes.update(font_overrides)
-
     generate_rankings_image(
         rankings,
         week_label=week_label,
@@ -309,7 +346,7 @@ def generate():
         top_n=10,
         color_overrides=color_overrides,
         gradient_overrides=None,
-        font_overrides=font_overrides,
+        font_overrides=active_font_sizes,
         movement=movement,
     )
 
@@ -391,9 +428,10 @@ def regenerate():
     # ── Collect team color overrides ────────────────────────
     color_overrides = _collect_solid_color_overrides(request.form)
     gradient_overrides = _collect_gradient_overrides(request.form)
+    text_mode_overrides = _collect_text_mode_overrides(request.form)
 
     # ── Collect font size overrides ─────────────────────────
-    font_overrides = _collect_font_overrides(request.form)
+    active_font_sizes = _build_active_font_sizes(request.form)
 
     # ── Re-run the rankings engine ──────────────────────────
     try:
@@ -428,9 +466,6 @@ def regenerate():
     out_filename = f"power_rankings_{uuid.uuid4().hex}.png"
     out_path = os.path.join(OUTPUT_DIR, out_filename)
 
-    active_font_sizes = dict(DEFAULT_FONT_SIZES)
-    active_font_sizes.update(font_overrides)
-
     generate_rankings_image(
         rankings,
         week_label=week_label,
@@ -440,7 +475,8 @@ def regenerate():
         top_n=10,
         color_overrides=color_overrides,
         gradient_overrides=gradient_overrides,
-        font_overrides=font_overrides,
+        text_mode_overrides=text_mode_overrides,
+        font_overrides=active_font_sizes,
         movement=movement,
     )
 
@@ -464,7 +500,13 @@ def regenerate():
         rankings,
         solid_overrides=color_overrides,
         gradient_overrides=gradient_overrides,
+        text_mode_overrides=text_mode_overrides,
     )
+    try:
+        _persist_customizations(team_colors, active_font_sizes)
+        flash("Customization saved to saved_customizations.json.", "success")
+    except Exception as exc:
+        flash(f"Customization was applied but could not be saved: {exc}", "error")
 
     return render_template(
         "results.html",

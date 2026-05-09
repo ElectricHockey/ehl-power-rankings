@@ -171,6 +171,7 @@ def generate_rankings_image(
     top_n=10,
     color_overrides=None,
     gradient_overrides=None,
+    text_mode_overrides=None,
     font_overrides=None,
     movement=None,
 ):
@@ -196,6 +197,8 @@ def generate_rankings_image(
     gradient_overrides : dict or None
         Optional {team_name: ("#RRGGBB", "#RRGGBB")} to override gradient
         start/end colors.
+    text_mode_overrides : dict or None
+        Optional {team_name: "auto"|"light"|"dark"} to override team-name text.
     font_overrides : dict or None
         Optional {"title": int, "subtitle": int, "team": int, "rank": int}
         to override default font sizes (in pt).
@@ -212,6 +215,8 @@ def generate_rankings_image(
         color_overrides = {}
     if gradient_overrides is None:
         gradient_overrides = {}
+    if text_mode_overrides is None:
+        text_mode_overrides = {}
     if movement is None:
         movement = {}
 
@@ -297,6 +302,13 @@ def generate_rankings_image(
                     style["bar_color"] = start_rgb
                     style["bar_gradient"] = (start_rgb, end_rgb)
                     style["text_color"] = _contrast_text_color(_blend_rgb(start_rgb, end_rgb))
+        text_mode = text_mode_overrides.get(team.name)
+        if text_mode == "light":
+            style = dict(style)
+            style["text_color"] = (255, 255, 255)
+        elif text_mode == "dark":
+            style = dict(style)
+            style["text_color"] = (0, 0, 0)
 
         # Rank box (red rounded rectangle)
         rank_x0, rank_y0 = 10, y + 5

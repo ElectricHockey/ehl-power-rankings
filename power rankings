@@ -1,4 +1,5 @@
 import csv
+import math
 import re
 from collections import defaultdict
 from io import StringIO
@@ -105,6 +106,36 @@ class Team:
 # CSV PARSER
 # ============================================================
 
+def _looks_like_game_row(first_cell):
+    """Return True when the first schedule cell looks like a game row."""
+    val = (first_cell or '').strip()
+    if not val:
+        return False
+    # Examples:
+    # - "1"
+    # - "1 8:00 PM"
+    # - "24 9:15 PM"
+    # - "001 - 9:00 PM"
+    if re.match(r'^\d+$', val):
+        return True
+    if re.match(r'^\d+\s+\d{1,2}:\d{2}(?:\s*[AP]M)?$', val, re.IGNORECASE):
+        return True
+    if re.match(r'^\d+\s*-\s*\d{1,2}:\d{2}(?:\s*[AP]M)?$', val, re.IGNORECASE):
+        return True
+    return False
+
+
+def _parse_score_cell(raw):
+    """Parse a score cell to int while rejecting non-integer numeric values."""
+    value = float(raw)
+    if not math.isfinite(value):
+        raise ValueError("score is not finite")
+    rounded = round(value)
+    if abs(value - rounded) > 1e-9:
+        raise ValueError("score is not an integer value")
+    return int(rounded)
+
+
 def parse_schedule(csv_text):
     """
     Parses the EHL schedule CSV and returns a dict of Team objects.
@@ -118,28 +149,124 @@ def parse_schedule(csv_text):
             teams[name] = Team(name)
         return teams[name]
 
+    def _clean_header(text):
+        return re.sub(r'[^a-z0-9]+', ' ', str(text or '').strip().lower()).strip()
+
+    def _get_cell(row, idx):
+        if idx is None or idx < 0 or idx >= len(row):
+            return ''
+        return row[idx].strip()
+
+    def _infer_columns(row, current):
+        """Infer column positions from a header row when present."""
+        inferred = dict(current)
+        found = set()
+
+        for i, cell in enumerate(row):
+            c = _clean_header(cell)
+            if not c:
+                continue
+
+            # Scores before team-name checks to avoid collisions ("home score")
+            if 'home' in c and ('score' in c or 'goal' in c):
+                inferred['home_score'] = i
+                found.add('home_score')
+                continue
+            if 'away' in c and ('score' in c or 'goal' in c):
+                inferred['away_score'] = i
+                found.add('away_score')
+                continue
+
+            if (
+                c in ('#', 'game', 'game #', 'game number', 'game num', 'match')
+                or c.startswith('game ')
+                or ('game' in c and ('time' in c or 'number' in c or 'num' in c))
+            ):
+                inferred['game'] = i
+                found.add('game')
+                continue
+            if 'home' in c and 'team' in c:
+                inferred['home_name'] = i
+                found.add('home_name')
+                continue
+            if 'away' in c and 'team' in c:
+                inferred['away_name'] = i
+                found.add('away_name')
+                continue
+            if c == 'home':
+                inferred['home_name'] = i
+                found.add('home_name')
+                continue
+            if c == 'away':
+                inferred['away_name'] = i
+                found.add('away_name')
+                continue
+            if c in ('ot', 'overtime'):
+                inferred['ot'] = i
+                found.add('ot')
+                continue
+            if 'status' in c or c in ('result', 'results'):
+                inferred['status'] = i
+                found.add('status')
+                continue
+
+        is_header = (
+            ('home_name' in found and 'away_name' in found)
+            and ('home_score' in found or 'away_score' in found or 'status' in found or 'game' in found)
+        )
+        return inferred, is_header
+
+    # Default mapping for existing CSV layout
+    col_idx = {
+        'game': 0,
+        'home_name': 1,
+        'home_score': 2,
+        'ot': 3,
+        'away_score': 4,
+        'away_name': 5,
+        'status': 7,
+    }
+
     lines = csv_text.strip().split('\n')
     reader = csv.reader(lines)
 
     for row in reader:
-        # Skip header row and date rows
-        if len(row) < 8:
-            continue
-        if row[0].startswith('Date') or row[0].startswith('"') or not row[0].strip():
+        if not row:
             continue
 
-        game_num_time = row[0].strip()
-        # Check it's a game row (starts with digits)
-        if not re.match(r'^\d+', game_num_time):
+        # Update column indices whenever a header row appears.
+        col_idx, is_header = _infer_columns(row, col_idx)
+        if is_header:
             continue
 
-        home_name   = row[1].strip()
-        away_name   = row[4].strip() if len(row) > 4 else ''
-        status      = row[7].strip() if len(row) > 7 else ''
-
-        # Skip incomplete or in-progress games
-        if status.lower() in ('incomplete', 'in progress', ''):
+        # Find first non-empty cell to detect game/date rows robustly.
+        first_non_empty = ''
+        for cell in row:
+            val = (cell or '').strip()
+            if val:
+                first_non_empty = val
+                break
+        if not first_non_empty:
             continue
+
+        home_name = _get_cell(row, col_idx['home_name'])
+        away_name = _get_cell(row, col_idx['away_name'])
+        home_score_raw = _get_cell(row, col_idx['home_score'])
+        away_score_raw = _get_cell(row, col_idx['away_score'])
+        status = _get_cell(row, col_idx['status'])
+
+        # Primary row detection:
+        # 1) classic game-number row OR
+        # 2) schedules without game-number column but with teams + scores present.
+        game_cell = _get_cell(row, col_idx['game'])
+        has_game_marker = (
+            _looks_like_game_row(game_cell) or _looks_like_game_row(first_non_empty)
+        )
+        has_core_game_fields = bool(home_name and away_name and home_score_raw and away_score_raw)
+        if not has_game_marker and not has_core_game_fields:
+            continue
+
+        status_norm = status.lower()
 
         # Skip if team names are missing
         if not home_name or not away_name:
@@ -148,28 +275,34 @@ def parse_schedule(csv_text):
         home_team = get_team(home_name)
         away_team = get_team(away_name)
 
-        # Parse scores
-        home_score_raw = row[2].strip() if len(row) > 2 else ''
-        away_score_raw = row[3].strip() if len(row) > 3 else ''  # OT marker sometimes here
-
-        # Handle OT notation (e.g., "7,OT,8" -> OT game)
+        # Check OT marker column (if present)
         is_ot = False
-        # Check if the middle column contains "OT"
-        middle = row[3].strip() if len(row) > 3 else ''
+        middle = _get_cell(row, col_idx['ot'])
         if middle.upper() == 'OT':
             is_ot = True
-            away_score_raw = row[4].strip() if len(row) > 4 else ''
-            away_name = row[5].strip() if len(row) > 5 else away_name
-            away_team = get_team(away_name)
 
         try:
-            home_score = int(home_score_raw)
-            away_score = int(away_score_raw)
-        except ValueError:
+            home_score = _parse_score_cell(home_score_raw)
+            away_score = _parse_score_cell(away_score_raw)
+        except (ValueError, OverflowError):
+            continue
+
+        # Normalize status values for different export layouts.
+        if status_norm in ('', 'completed', 'complete', 'final'):
+            normalized_status = 'completed'
+            # Some layouts use values like "Final/OT" in status.
+            if 'ot' in status_norm:
+                is_ot = True
+        elif status_norm in ('forfeit', 'forfeited'):
+            normalized_status = 'forfeit'
+        elif status_norm in ('incomplete', 'in progress', 'scheduled', 'postponed'):
+            continue
+        else:
+            # Unknown status strings are ignored.
             continue
 
         # ---- FORFEIT HANDLING ----
-        if status.lower() == 'forfeit':
+        if normalized_status == 'forfeit':
             # In your data: the loser forfeited.
             # Score of 1-0 means the team with 0 forfeited.
             if home_score > away_score:
@@ -195,7 +328,7 @@ def parse_schedule(csv_text):
             # Goals NOT counted for forfeits (don't reward/penalize GD on forfeits)
 
         # ---- COMPLETED GAME HANDLING ----
-        elif status.lower() == 'completed':
+        elif normalized_status == 'completed':
             home_team.goals_for     += home_score
             home_team.goals_against += away_score
             away_team.goals_for     += away_score
@@ -370,6 +503,262 @@ def print_movement(season_rankings, weekly_rankings):
         print(f"{name:<28} #{str(s_rank):<11} #{str(w_rank):<10} {move:>10}")
 
     print(f"{'='*65}\n")
+
+
+# ============================================================
+# WEEK HELPERS
+# ============================================================
+
+# Maps day-name strings to weekday numbers (Monday=0 … Sunday=6).
+_WEEKDAY_MAP = {
+    'monday': 0, 'tuesday': 1, 'wednesday': 2, 'thursday': 3,
+    'friday': 4, 'saturday': 5, 'sunday': 6,
+    'mon': 0, 'tue': 1, 'wed': 2, 'thu': 3, 'fri': 4, 'sat': 5, 'sun': 6,
+}
+
+
+def _extract_weekday_num(first_cell):
+    """Return weekday number (0=Mon…6=Sun) if *first_cell* starts with a day
+    name, otherwise return None."""
+    word = re.split(r'[\s,]+', (first_cell or '').strip().lower())
+    return _WEEKDAY_MAP.get(word[0]) if word else None
+
+
+def _group_date_rows_by_calendar_week(csv_text):
+    """Group date-header line indices into calendar (Mon–Sun) weeks.
+
+    Returns a list of lists of line indices.  Each inner list contains all
+    date-header row indices that fall in the same Monday–Sunday calendar week.
+
+    Week boundaries are detected by observing when the weekday number
+    decreases or stays the same compared to the previous game-day row (e.g.
+    a Monday after a Friday means a new week has started).
+
+    If none of the date-header rows contain a recognisable weekday name the
+    function returns an empty list so the caller can fall back to the
+    legacy ``days_per_week`` heuristic.
+    """
+    lines = csv_text.strip().split('\n')
+    date_indices = _find_date_row_indices(csv_text)
+    if not date_indices:
+        return []
+
+    weeks = []
+    current_week = []
+    prev_weekday = None
+    found_any = False
+
+    for i in date_indices:
+        line = lines[i] if i < len(lines) else ''
+        try:
+            row = next(csv.reader([line.strip()]))
+        except (StopIteration, csv.Error):
+            row = [line.strip()]
+        first_cell = row[0].strip() if row else ''
+        weekday = _extract_weekday_num(first_cell)
+
+        if weekday is not None:
+            found_any = True
+            if prev_weekday is not None and weekday <= prev_weekday:
+                # Weekday went backwards (or repeated) → new calendar week
+                if current_week:
+                    weeks.append(current_week)
+                current_week = [i]
+            else:
+                current_week.append(i)
+            prev_weekday = weekday
+        else:
+            # Day name not recognised → fold into the current week
+            current_week.append(i)
+
+    if current_week:
+        weeks.append(current_week)
+
+    # Return [] to signal "no calendar info found" so caller falls back
+    return weeks if found_any else []
+
+
+def _find_date_row_indices(csv_text):
+    """Find the line indices of week-boundary rows in the CSV text.
+
+    A week-boundary row is any row that is **not** a game row and **not** a
+    recognised column-header row.  Game rows are identified by their first
+    cell matching the pattern ``digits + space`` (e.g. ``1 8:00 PM``,
+    ``24 9:15 PM``).  This approach works regardless of the date format used
+    in the schedule (text dates, numeric dates, datetime objects, etc.).
+    """
+    lines = csv_text.strip().split('\n')
+    indices = []
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if not stripped:
+            continue
+
+        try:
+            row = next(csv.reader([stripped]))
+        except (StopIteration, csv.Error):
+            continue
+        if not row:
+            continue
+
+        # Check every cell — find the first non-empty one
+        first_non_empty = ''
+        for cell in row:
+            val = cell.strip() if cell else ''
+            if val:
+                first_non_empty = val
+                break
+
+        if not first_non_empty:
+            continue  # completely empty row
+
+        # Game rows (e.g. "1" or "1 8:00 PM").
+        if _looks_like_game_row(first_non_empty):
+            continue
+
+        # Column-header rows (skip the table header, not a week boundary)
+        lower_val = first_non_empty.lower()
+        if lower_val in ('#', 'game', 'game#', 'game #', 'date', 'home', 'away'):
+            continue
+        if lower_val.startswith('date') and len(lower_val) < 10:
+            continue
+        if lower_val.startswith('game') and len(lower_val) < 10:
+            continue
+
+        # Everything else is a week boundary (date row, section header, etc.)
+        indices.append(i)
+    return indices
+
+
+def count_weeks(csv_text, days_per_week=1):
+    """Count the number of weeks in the schedule.
+
+    When date-header rows contain weekday names the count is determined by
+    calendar week grouping (Mon–Sun).  Otherwise the legacy heuristic of
+    dividing date-header rows by *days_per_week* is used.
+    """
+    week_groups = _group_date_rows_by_calendar_week(csv_text)
+    if week_groups:
+        return len(week_groups)
+    n_dates = len(_find_date_row_indices(csv_text))
+    dpw = max(1, days_per_week)
+    return n_dates // dpw
+
+
+def schedule_up_to_week(csv_text, max_week, days_per_week=1):
+    """Return CSV text containing only games from weeks 1 through *max_week*.
+
+    When date-header rows contain weekday names (e.g. "Monday January 6")
+    week boundaries are determined automatically by calendar week (Monday–
+    Sunday).  Otherwise the legacy *days_per_week* heuristic is used as a
+    fallback.
+    """
+    lines = csv_text.strip().split('\n')
+    date_indices = _find_date_row_indices(csv_text)
+
+    if not date_indices or max_week < 1:
+        return csv_text
+
+    # ── Calendar-week grouping (preferred) ──────────────────────
+    week_groups = _group_date_rows_by_calendar_week(csv_text)
+    if week_groups:
+        if max_week >= len(week_groups):
+            return csv_text  # All weeks are included
+        # Cut at the first line of the next calendar week
+        end_idx = min(week_groups[max_week])
+        return '\n'.join(lines[:end_idx])
+
+    # ── Legacy fallback: days_per_week heuristic ─────────────────
+    dpw = max(1, days_per_week)
+    max_date_rows = min(max_week * dpw, len(date_indices))
+    if max_date_rows < len(date_indices):
+        end_idx = date_indices[max_date_rows]
+    else:
+        end_idx = len(lines)
+    return '\n'.join(lines[:end_idx])
+
+
+def compute_movement(csv_text, target_week, days_per_week=1):
+    """Compare rankings through *target_week* vs *target_week - 1*.
+
+    *days_per_week* is how many date-header rows (game-days) make up one
+    week.  Returns a dict ``{team_name: int}`` where a positive value means
+    the team moved **up** and negative means **down**.  Teams new this week
+    get ``None``.  Returns an empty dict when there is no previous week.
+    """
+    if target_week <= 1:
+        return {}
+
+    current_csv = schedule_up_to_week(csv_text, target_week, days_per_week)
+    prev_csv = schedule_up_to_week(csv_text, target_week - 1, days_per_week)
+
+    current_teams = parse_schedule(current_csv)
+    current_rankings = calculate_power_scores(current_teams)
+
+    prev_teams = parse_schedule(prev_csv)
+    prev_rankings = calculate_power_scores(prev_teams)
+
+    prev_ranks = {t.name: i + 1 for i, (t, _, _) in enumerate(prev_rankings)}
+
+    movement = {}
+    for i, (team, _score, _bd) in enumerate(current_rankings):
+        curr_rank = i + 1
+        prev_rank = prev_ranks.get(team.name)
+        if prev_rank is not None:
+            movement[team.name] = prev_rank - curr_rank  # positive = moved up
+        else:
+            movement[team.name] = None  # brand-new team
+    return movement
+
+
+# ============================================================
+# XLSX HELPER
+# ============================================================
+
+def xlsx_to_csv_text(xlsx_path):
+    """Read the first sheet of an .xlsx file and return CSV text.
+
+    Requires *openpyxl* (listed in requirements.txt).
+
+    Special handling:
+    - datetime cells are converted to "DayName MonthName Day" format
+      (e.g. ``Monday January 6``) so the week-detection regex works.
+    - All other non-string values are converted to their ``str()``
+      representation so the CSV parser sees text it can handle.
+    """
+    import openpyxl
+    from io import StringIO
+    import datetime as _dt
+
+    wb = openpyxl.load_workbook(xlsx_path, read_only=True, data_only=True)
+    ws = wb.active
+
+    buf = StringIO()
+    writer = csv.writer(buf)
+    for row in ws.iter_rows(values_only=True):
+        converted = []
+        for c in row:
+            if c is None:
+                converted.append('')
+            elif isinstance(c, _dt.datetime):
+                # "Monday January 6" — matches the date-header regex
+                converted.append(c.strftime("%A %B ") + str(c.day))
+            elif isinstance(c, _dt.date):
+                converted.append(c.strftime("%A %B ") + str(c.day))
+            elif isinstance(c, (int, float)):
+                # Excel often stores whole numbers as float; convert to int safely
+                if isinstance(c, float) and c.is_integer():
+                    try:
+                        converted.append(str(int(c)))
+                    except (OverflowError, ValueError):
+                        converted.append(str(c))
+                else:
+                    converted.append(str(c))
+            else:
+                converted.append(str(c))
+        writer.writerow(converted)
+    wb.close()
+    return buf.getvalue()
 
 
 # ============================================================

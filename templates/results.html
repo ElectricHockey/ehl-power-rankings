@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EHL Power Rankings – Results</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #111;
+      color: #eee;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    header {
+      text-align: center;
+      padding: 40px 20px 10px;
+    }
+    header h1 {
+      font-size: 2.2rem;
+      color: #ffd700;
+      text-transform: uppercase;
+      letter-spacing: 3px;
+    }
+    header p { color: #aaa; margin-top: 6px; }
+    .card {
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 12px;
+      padding: 28px;
+      margin: 24px 20px;
+      max-width: 800px;
+      width: 100%;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 20px;
+    }
+    th {
+      text-align: left;
+      padding: 10px 8px;
+      border-bottom: 2px solid #ffd700;
+      color: #ffd700;
+      font-size: .9rem;
+      text-transform: uppercase;
+    }
+    td {
+      padding: 10px 8px;
+      border-bottom: 1px solid #222;
+      font-size: .95rem;
+    }
+    tr:nth-child(even) td { background: #161616; }
+    .rank { font-weight: 800; color: #ffd700; font-size: 1.1rem; }
+    .preview {
+      text-align: center;
+      margin: 24px 0;
+    }
+    .preview img {
+      max-width: 100%;
+      border-radius: 10px;
+      border: 2px solid #333;
+    }
+    .actions {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .btn {
+      display: inline-block;
+      padding: 14px 28px;
+      font-size: 1rem;
+      font-weight: 700;
+      text-decoration: none;
+      border-radius: 8px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      transition: background .2s;
+      border: none;
+      cursor: pointer;
+    }
+    .btn-primary {
+      color: #000;
+      background: #ffd700;
+    }
+    .btn-primary:hover { background: #e6c200; }
+    .btn-secondary {
+      color: #eee;
+      background: #333;
+      border: 1px solid #555;
+    }
+    .btn-secondary:hover { background: #444; }
+    footer {
+      margin-top: auto;
+      padding: 20px;
+      color: #555;
+      font-size: .85rem;
+    }
+    /* Team color customization */
+    .color-section h3 {
+      color: #ffd700;
+      font-size: 1.1rem;
+      margin-bottom: 12px;
+      text-align: center;
+    }
+    .color-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px 16px;
+      margin-bottom: 16px;
+    }
+    .color-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .color-item input[type="color"] {
+      width: 40px;
+      height: 34px;
+      border: 1px solid #444;
+      border-radius: 6px;
+      background: #222;
+      cursor: pointer;
+      padding: 2px;
+      flex-shrink: 0;
+    }
+    .color-item .team-label {
+      font-size: .9rem;
+      color: #ccc;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .regen-btn {
+      display: block;
+      width: 100%;
+      padding: 14px;
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #000;
+      background: #ffd700;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      transition: background .2s;
+    }
+    .regen-btn:hover { background: #e6c200; }
+    /* Font size section */
+    .font-section {
+      margin-top: 20px;
+      margin-bottom: 18px;
+    }
+    .font-section h3 {
+      color: #ffd700;
+      font-size: 1.1rem;
+      margin-bottom: 12px;
+      text-align: center;
+    }
+    .font-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px 16px;
+      margin-bottom: 16px;
+    }
+    .font-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .font-item label {
+      font-size: .9rem;
+      color: #ccc;
+      white-space: nowrap;
+      min-width: 70px;
+    }
+    .font-item input[type="number"] {
+      width: 70px;
+      padding: 6px 8px;
+      background: #222;
+      border: 1px solid #444;
+      border-radius: 6px;
+      color: #eee;
+      font-size: .95rem;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🏒 Power Rankings</h1>
+    <p>{{ div_label }} {{ week_label }} — {{ total_ranked }} teams ranked</p>
+  </header>
+
+  <div class="card">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Team</th>
+          <th>Record</th>
+          <th>Pts</th>
+          <th>GD</th>
+          <th>Score</th>
+          <th>Streak</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in results %}
+        <tr>
+          <td class="rank">{{ t.rank }}</td>
+          <td>{{ t.name }}</td>
+          <td>{{ t.record }}</td>
+          <td>{{ t.points }}</td>
+          <td>{{ t.gd }}</td>
+          <td>{{ t.score }}</td>
+          <td>{{ t.streak }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Customization card: colors + font sizes -->
+  <div class="card">
+    <form action="{{ url_for('regenerate') }}" method="post">
+      <div class="color-section">
+        <h3>🎨 Customize Team Colors</h3>
+        <div class="color-grid">
+          {% for tc in team_colors %}
+          <div class="color-item">
+            <input type="hidden" name="team_name[]" value="{{ tc.name }}">
+            <input type="color" name="team_color[]" value="{{ tc.color }}">
+            <span class="team-label">{{ tc.name }}</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="font-section">
+        <h3>🔤 Font Sizes (pt)</h3>
+        <div class="font-grid">
+          <div class="font-item">
+            <label for="font_title">Title</label>
+            <input type="number" id="font_title" name="font_title" value="{{ font_sizes.title }}" min="10" max="200" step="2">
+          </div>
+          <div class="font-item">
+            <label for="font_subtitle">Subtitle</label>
+            <input type="number" id="font_subtitle" name="font_subtitle" value="{{ font_sizes.subtitle }}" min="10" max="200" step="2">
+          </div>
+          <div class="font-item">
+            <label for="font_team">Team Name</label>
+            <input type="number" id="font_team" name="font_team" value="{{ font_sizes.team }}" min="10" max="200" step="2">
+          </div>
+          <div class="font-item">
+            <label for="font_rank">Rank #</label>
+            <input type="number" id="font_rank" name="font_rank" value="{{ font_sizes.rank }}" min="10" max="200" step="2">
+          </div>
+        </div>
+      </div>
+
+      <button type="submit" class="regen-btn">🔄 Regenerate Image</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2 style="text-align:center;margin-bottom:16px;color:#ffd700;">Preview</h2>
+    <div class="preview">
+      <img src="{{ url_for('download', filename=image_file, preview=1) }}" alt="Power Rankings Image">
+    </div>
+    <div class="actions">
+      <a class="btn btn-primary" href="{{ url_for('download', filename=image_file) }}">⬇ Download Image</a>
+      <a class="btn btn-secondary" href="{{ url_for('index') }}">← Upload New Schedule</a>
+    </div>
+  </div>
+
+  <footer>EHL Power Rankings Generator</footer>
+</body>
+</html>

@@ -91,8 +91,9 @@ def _draw_rounded_gradient(img, xy, radius, left_color, right_color):
 
     grad = Image.new("RGB", (w, h))
     px = grad.load()
+    denom = max(1, w - 1)
     for x in range(w):
-        t = x / (w - 1) if w > 1 else 0.0
+        t = x / denom
         color = (
             int(round(left_color[0] + (right_color[0] - left_color[0]) * t)),
             int(round(left_color[1] + (right_color[1] - left_color[1]) * t)),

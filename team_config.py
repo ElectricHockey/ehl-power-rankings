@@ -6,15 +6,21 @@
 
 import os
 import re
+import colorsys
 from PIL import Image
 
 # Logo palette extraction tuning constants
-LOGO_SAMPLE_SIZE = 48
+LOGO_SAMPLE_SIZE = 64
 ALPHA_VISIBILITY_THRESHOLD = 40
-LOGO_PALETTE_SIZE = 6
+LOGO_PALETTE_SIZE = 10
 MIN_COLOR_DISTANCE = 50
 DARK_COLOR_BLEND_RATIO = 0.30
 LIGHT_COLOR_BLEND_RATIO = 0.25
+LUMINANCE_THRESHOLD_FOR_BLACK_TEXT = 0.6
+MIN_SATURATION_FOR_BRAND_COLOR = 0.25
+MIN_SATURATION_FOR_NON_NEUTRAL = 0.16
+MIN_LUMINANCE_FOR_BRAND_COLOR = 0.08
+MAX_LUMINANCE_FOR_BRAND_COLOR = 0.94
 
 
 def hex_to_rgb(hex_str):
@@ -278,7 +284,29 @@ def _relative_luminance(rgb):
 
 def _contrast_text_color(bg_rgb):
     """Return black or white based on background luminance."""
-    return (0, 0, 0) if _relative_luminance(bg_rgb) >= 0.6 else (255, 255, 255)
+    return (0, 0, 0) if _relative_luminance(bg_rgb) >= LUMINANCE_THRESHOLD_FOR_BLACK_TEXT else (255, 255, 255)
+
+
+def _color_metrics(rgb):
+    """Return saturation and luminance metrics for palette filtering."""
+    _hue, saturation, _value = colorsys.rgb_to_hsv(rgb[0] / 255.0, rgb[1] / 255.0, rgb[2] / 255.0)
+    luminance = _relative_luminance(rgb)
+    return saturation, luminance
+
+
+def _is_brand_color(rgb):
+    """Prefer saturated, non-extreme tones over black/white padding/backgrounds."""
+    saturation, luminance = _color_metrics(rgb)
+    return (
+        saturation >= MIN_SATURATION_FOR_BRAND_COLOR and
+        MIN_LUMINANCE_FOR_BRAND_COLOR <= luminance <= MAX_LUMINANCE_FOR_BRAND_COLOR
+    )
+
+
+def _is_non_neutral_color(rgb):
+    """Fallback filter to skip mostly black/white/gray tones when possible."""
+    saturation, _luminance = _color_metrics(rgb)
+    return saturation >= MIN_SATURATION_FOR_NON_NEUTRAL
 
 
 def _extract_logo_gradient_style(logo_path):
@@ -313,12 +341,21 @@ def _extract_logo_gradient_style(logo_path):
         counts.sort(key=lambda x: x[0], reverse=True)
         colors = [c for _n, c in counts]
 
-        primary = colors[0]
+        brand_colors = [c for c in colors if _is_brand_color(c)]
+        non_neutral_colors = [c for c in colors if _is_non_neutral_color(c)]
+        candidate_colors = brand_colors or non_neutral_colors or colors
+
+        primary = candidate_colors[0]
         secondary = None
-        for c in colors[1:]:
+        for c in candidate_colors[1:]:
             if _color_distance(primary, c) >= MIN_COLOR_DISTANCE:
                 secondary = c
                 break
+        if secondary is None:
+            for c in colors:
+                if c != primary and _color_distance(primary, c) >= MIN_COLOR_DISTANCE:
+                    secondary = c
+                    break
         if secondary is None:
             # Create a subtle two-tone gradient if logo is mostly one color.
             lum = _relative_luminance(primary)

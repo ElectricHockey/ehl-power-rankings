@@ -82,6 +82,19 @@ def _draw_rounded_rect(draw, xy, radius, fill):
     draw.rounded_rectangle(xy, radius=r, fill=fill)
 
 
+def _blend_rgb(c1, c2, t=0.5):
+    return (
+        int(round(c1[0] + (c2[0] - c1[0]) * t)),
+        int(round(c1[1] + (c2[1] - c1[1]) * t)),
+        int(round(c1[2] + (c2[2] - c1[2]) * t)),
+    )
+
+
+def _contrast_text_color(bg_rgb):
+    luminance = (0.2126 * bg_rgb[0] + 0.7152 * bg_rgb[1] + 0.0722 * bg_rgb[2]) / 255.0
+    return (0, 0, 0) if luminance >= 0.6 else (255, 255, 255)
+
+
 def _draw_rounded_gradient(img, xy, radius, left_color, right_color):
     """Draw a horizontal gradient clipped to a rounded rectangle."""
     x0, y0, x1, y1 = xy
@@ -147,6 +160,7 @@ def generate_rankings_image(
     output_path="power_rankings.png",
     top_n=10,
     color_overrides=None,
+    gradient_overrides=None,
     font_overrides=None,
     movement=None,
 ):
@@ -169,6 +183,9 @@ def generate_rankings_image(
         How many teams to show in the image (default 10).
     color_overrides : dict or None
         Optional {team_name: "#RRGGBB"} to override bar colors.
+    gradient_overrides : dict or None
+        Optional {team_name: ("#RRGGBB", "#RRGGBB")} to override gradient
+        start/end colors.
     font_overrides : dict or None
         Optional {"title": int, "subtitle": int, "team": int, "rank": int}
         to override default font sizes (in pt).
@@ -183,6 +200,8 @@ def generate_rankings_image(
     """
     if color_overrides is None:
         color_overrides = {}
+    if gradient_overrides is None:
+        gradient_overrides = {}
     if movement is None:
         movement = {}
 
@@ -257,6 +276,17 @@ def generate_rankings_image(
                 style = dict(style)  # copy to avoid mutating config
                 style["bar_color"] = rgb
                 style.pop("bar_gradient", None)
+                style["text_color"] = _contrast_text_color(rgb)
+        if team.name in gradient_overrides:
+            gradient_hex = gradient_overrides[team.name]
+            if isinstance(gradient_hex, (list, tuple)) and len(gradient_hex) == 2:
+                start_rgb = hex_to_rgb(gradient_hex[0])
+                end_rgb = hex_to_rgb(gradient_hex[1])
+                if start_rgb and end_rgb:
+                    style = dict(style)
+                    style["bar_color"] = start_rgb
+                    style["bar_gradient"] = (start_rgb, end_rgb)
+                    style["text_color"] = _contrast_text_color(_blend_rgb(start_rgb, end_rgb))
 
         # Rank box (red rounded rectangle)
         rank_x0, rank_y0 = 10, y + 5

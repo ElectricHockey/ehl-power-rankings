@@ -8,7 +8,6 @@ import os
 import importlib
 import importlib.util
 import importlib.machinery
-import json
 import re
 import tempfile
 import uuid
@@ -16,7 +15,7 @@ import uuid
 from flask import Flask, render_template, request, send_file, redirect, url_for, flash, session
 
 from generate_image import generate_rankings_image, DEFAULT_FONT_SIZES
-from team_config import get_team_style, hex_to_rgb
+from team_config import get_team_style
 
 # ── Import the ranking engine from the file named "power rankings" ──
 _engine_path = os.path.join(os.path.dirname(__file__), "power rankings")
@@ -45,10 +44,12 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", os.urandom(24).hex())
 
 UPLOAD_DIR = os.path.join(tempfile.gettempdir(), "ehl_uploads")
 OUTPUT_DIR = os.path.join(tempfile.gettempdir(), "ehl_outputs")
+SCHEDULE_CACHE_DIR = os.path.join(tempfile.gettempdir(), "ehl_schedule_cache")
 LOGO_DIR = os.path.join(os.path.dirname(__file__), "logos")
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+os.makedirs(SCHEDULE_CACHE_DIR, exist_ok=True)
 
 
 def _collect_font_overrides(form):
@@ -64,6 +65,112 @@ def _collect_font_overrides(form):
             except (ValueError, TypeError):
                 pass
     return overrides
+
+
+def _normalize_hex_color(value):
+    """Return normalized #RRGGBB or None for invalid input."""
+    if not value:
+        return None
+    hex_val = value.strip().lstrip("#")
+    if re.match(r"^[0-9a-fA-F]{6}$", hex_val):
+        return f"#{hex_val.lower()}"
+    return None
+
+
+def _collect_solid_color_overrides(form):
+    """Extract solid team color overrides from form data."""
+    overrides = {}
+    team_names = form.getlist("team_name[]")
+    team_colors = form.getlist("team_color[]")
+    for name, color in zip(team_names, team_colors):
+        name = name.strip()
+        normalized = _normalize_hex_color(color)
+        if name and normalized:
+            overrides[name] = normalized
+    return overrides
+
+
+def _collect_gradient_overrides(form):
+    """Extract gradient team color overrides from form data."""
+    overrides = {}
+    team_names = form.getlist("team_name[]")
+    start_colors = form.getlist("team_color_start[]")
+    end_colors = form.getlist("team_color_end[]")
+    for name, start_color, end_color in zip(team_names, start_colors, end_colors):
+        name = name.strip()
+        start_hex = _normalize_hex_color(start_color)
+        end_hex = _normalize_hex_color(end_color)
+        if name and start_hex and end_hex:
+            overrides[name] = (start_hex, end_hex)
+    return overrides
+
+
+def _remove_cached_schedule(cache_name):
+    """Remove a cached schedule file by basename."""
+    if not cache_name:
+        return
+    safe_name = os.path.basename(cache_name)
+    path = os.path.join(SCHEDULE_CACHE_DIR, safe_name)
+    resolved = os.path.realpath(path)
+    if not resolved.startswith(os.path.realpath(SCHEDULE_CACHE_DIR)):
+        return
+    if os.path.isfile(resolved):
+        os.remove(resolved)
+
+
+def _cache_schedule_text(csv_text):
+    """Persist CSV text in a server-side cache file and return its basename."""
+    cache_name = f"{uuid.uuid4().hex}.csv"
+    cache_path = os.path.join(SCHEDULE_CACHE_DIR, cache_name)
+    with open(cache_path, "w", encoding="utf-8") as f:
+        f.write(csv_text)
+    return cache_name
+
+
+def _load_cached_schedule_text(cache_name):
+    """Load CSV text from a server-side cache file by basename."""
+    if not cache_name:
+        return None
+    safe_name = os.path.basename(cache_name)
+    path = os.path.join(SCHEDULE_CACHE_DIR, safe_name)
+    resolved = os.path.realpath(path)
+    if not resolved.startswith(os.path.realpath(SCHEDULE_CACHE_DIR)):
+        return None
+    if not os.path.isfile(resolved):
+        return None
+    with open(resolved, "r", encoding="utf-8") as f:
+        return f.read()
+
+
+def _rgb_to_hex(rgb):
+    return "#{:02x}{:02x}{:02x}".format(*rgb)
+
+
+def _build_team_colors(rankings, solid_overrides=None, gradient_overrides=None):
+    """Build color-control data for the results template."""
+    solid_overrides = solid_overrides or {}
+    gradient_overrides = gradient_overrides or {}
+
+    team_colors = []
+    for team, _score, _bd in rankings:
+        style = get_team_style(team.name, logo_dir=LOGO_DIR)
+        gradient = style.get("bar_gradient") or (style["bar_color"], style["bar_color"])
+        start_hex = _rgb_to_hex(gradient[0])
+        end_hex = _rgb_to_hex(gradient[1])
+
+        if team.name in solid_overrides:
+            solid_hex = solid_overrides[team.name]
+            start_hex = solid_hex
+            end_hex = solid_hex
+        if team.name in gradient_overrides:
+            start_hex, end_hex = gradient_overrides[team.name]
+
+        team_colors.append({
+            "name": team.name,
+            "color_start": start_hex,
+            "color_end": end_hex,
+        })
+    return team_colors
 
 
 @app.route("/", methods=["GET"])
@@ -101,17 +208,7 @@ def generate():
     font_overrides = _collect_font_overrides(request.form)
 
     # ── Collect team color overrides ────────────────────────
-    color_overrides = {}
-    team_names = request.form.getlist("team_name[]")
-    team_colors = request.form.getlist("team_color[]")
-    for name, color in zip(team_names, team_colors):
-        name = name.strip()
-        color = color.strip()
-        if name and color:
-            # Ensure color is a valid hex string
-            hex_val = color.lstrip("#")
-            if re.match(r'^[0-9a-fA-F]{6}$', hex_val):
-                color_overrides[name] = f"#{hex_val}"
+    color_overrides = _collect_solid_color_overrides(request.form)
 
     # ── Save uploaded file ──────────────────────────────────
     ext = ".xlsx" if fname_lower.endswith(".xlsx") else ".csv"
@@ -158,8 +255,10 @@ def generate():
             os.remove(saved_path)
         return redirect(url_for("index"))
 
-    # Store CSV text in session for regeneration; remove uploaded file
-    session["csv_text"] = csv_text
+    # Store a small server-side cache reference for regeneration.
+    _remove_cached_schedule(session.get("schedule_cache_file"))
+    session.pop("csv_text", None)
+    session["schedule_cache_file"] = _cache_schedule_text(csv_text)
     session["week_label"] = week_label
     session["div_label"] = div_label
     session["days_per_week"] = days_per_week
@@ -199,13 +298,13 @@ def generate():
         output_path=out_path,
         top_n=10,
         color_overrides=color_overrides,
+        gradient_overrides=None,
         font_overrides=font_overrides,
         movement=movement,
     )
 
     # ── Build results table with ALL ranked teams ───────────
     results = []
-    team_colors = []
     for rank, (team, score, _bd) in enumerate(rankings, 1):
         stype, scount = team.current_streak
         streak = f"{stype}{scount}" if scount else "–"
@@ -219,20 +318,8 @@ def generate():
             "score": f"{score:.4f}",
             "streak": streak,
         })
-        # Get current bar color for the color picker
-        style = get_team_style(team.name, logo_dir=LOGO_DIR)
-        if team.name in color_overrides:
-            rgb = hex_to_rgb(color_overrides[team.name])
-            if rgb:
-                bar_color = color_overrides[team.name]
-            else:
-                bar_color = "#{:02x}{:02x}{:02x}".format(*style["bar_color"])
-        else:
-            bar_color = "#{:02x}{:02x}{:02x}".format(*style["bar_color"])
-        team_colors.append({
-            "name": team.name,
-            "color": bar_color,
-        })
+
+    team_colors = _build_team_colors(rankings, solid_overrides=color_overrides)
 
     return render_template(
         "results.html",
@@ -277,7 +364,12 @@ def download(filename):
 @app.route("/regenerate", methods=["POST"])
 def regenerate():
     """Re-generate the image using the previously uploaded schedule with new overrides."""
-    csv_text = session.get("csv_text")
+    csv_text = _load_cached_schedule_text(session.get("schedule_cache_file"))
+    if not csv_text:
+        csv_text = session.get("csv_text")
+        if csv_text:
+            session["schedule_cache_file"] = _cache_schedule_text(csv_text)
+            session.pop("csv_text", None)
     week_label = session.get("week_label", "WEEK 1")
     div_label = session.get("div_label", "3'S")
     days_per_week = session.get("days_per_week", 1)
@@ -287,16 +379,8 @@ def regenerate():
         return redirect(url_for("index"))
 
     # ── Collect team color overrides ────────────────────────
-    color_overrides = {}
-    team_names = request.form.getlist("team_name[]")
-    team_colors_form = request.form.getlist("team_color[]")
-    for name, color in zip(team_names, team_colors_form):
-        name = name.strip()
-        color = color.strip()
-        if name and color:
-            hex_val = color.lstrip("#")
-            if re.match(r'^[0-9a-fA-F]{6}$', hex_val):
-                color_overrides[name] = f"#{hex_val}"
+    color_overrides = _collect_solid_color_overrides(request.form)
+    gradient_overrides = _collect_gradient_overrides(request.form)
 
     # ── Collect font size overrides ─────────────────────────
     font_overrides = _collect_font_overrides(request.form)
@@ -345,13 +429,13 @@ def regenerate():
         output_path=out_path,
         top_n=10,
         color_overrides=color_overrides,
+        gradient_overrides=gradient_overrides,
         font_overrides=font_overrides,
         movement=movement,
     )
 
     # ── Build results + team colors ─────────────────────────
     results = []
-    team_colors = []
     for rank, (team, score, _bd) in enumerate(rankings, 1):
         stype, scount = team.current_streak
         streak = f"{stype}{scount}" if scount else "–"
@@ -365,19 +449,12 @@ def regenerate():
             "score": f"{score:.4f}",
             "streak": streak,
         })
-        style = get_team_style(team.name, logo_dir=LOGO_DIR)
-        if team.name in color_overrides:
-            rgb = hex_to_rgb(color_overrides[team.name])
-            if rgb:
-                bar_color = color_overrides[team.name]
-            else:
-                bar_color = "#{:02x}{:02x}{:02x}".format(*style["bar_color"])
-        else:
-            bar_color = "#{:02x}{:02x}{:02x}".format(*style["bar_color"])
-        team_colors.append({
-            "name": team.name,
-            "color": bar_color,
-        })
+
+    team_colors = _build_team_colors(
+        rankings,
+        solid_overrides=color_overrides,
+        gradient_overrides=gradient_overrides,
+    )
 
     return render_template(
         "results.html",

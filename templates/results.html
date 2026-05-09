@@ -109,14 +109,15 @@
     }
     .color-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px 16px;
+      grid-template-columns: 1fr;
+      gap: 10px;
       margin-bottom: 16px;
     }
     .color-item {
-      display: flex;
+      display: grid;
+      grid-template-columns: minmax(160px, 1fr) auto auto;
+      gap: 10px;
       align-items: center;
-      gap: 8px;
     }
     .color-item input[type="color"] {
       width: 40px;
@@ -131,9 +132,17 @@
     .color-item .team-label {
       font-size: .9rem;
       color: #ccc;
-      white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+    }
+    .color-picker-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #999;
+      font-size: .78rem;
+      text-transform: uppercase;
+      letter-spacing: .5px;
     }
     .regen-btn {
       display: block;
@@ -230,13 +239,20 @@
   <div class="card">
     <form action="{{ url_for('regenerate') }}" method="post">
       <div class="color-section">
-        <h3>🎨 Customize Team Colors</h3>
+        <h3>🎨 Customize Team Gradients</h3>
         <div class="color-grid">
           {% for tc in team_colors %}
           <div class="color-item">
             <input type="hidden" name="team_name[]" value="{{ tc.name }}">
-            <input type="color" name="team_color[]" value="{{ tc.color }}">
             <span class="team-label">{{ tc.name }}</span>
+            <label class="color-picker-group">
+              <span>Start</span>
+              <input type="color" name="team_color_start[]" value="{{ tc.color_start }}">
+            </label>
+            <label class="color-picker-group">
+              <span>End</span>
+              <input type="color" name="team_color_end[]" value="{{ tc.color_end }}">
+            </label>
           </div>
           {% endfor %}
         </div>

@@ -66,7 +66,7 @@ Team bar styling now auto-matches logo colors by default:
 - The app extracts dominant colors from each team logo.
 - Team bars render with a left→right gradient using those logo colors.
 - Team-name text color (black/white) is auto-selected for contrast.
-- Manual color overrides in the UI still work and force a solid bar color.
+- On the results page you can manually adjust the gradient start/end colors for each team and regenerate the image.
 
 ## Project Structure
 

@@ -8,6 +8,14 @@ import os
 import re
 from PIL import Image
 
+# Logo palette extraction tuning constants
+LOGO_SAMPLE_SIZE = 48
+ALPHA_VISIBILITY_THRESHOLD = 40
+LOGO_PALETTE_SIZE = 6
+MIN_COLOR_DISTANCE = 50
+DARK_COLOR_BLEND_RATIO = 0.30
+LIGHT_COLOR_BLEND_RATIO = 0.25
+
 
 def hex_to_rgb(hex_str):
     """Convert a hex color string like '#FF0000' or 'FF0000' to an (R, G, B) tuple.
@@ -281,12 +289,12 @@ def _extract_logo_gradient_style(logo_path):
 
     try:
         img = Image.open(logo_path).convert("RGBA")
-        img.thumbnail((48, 48), Image.Resampling.LANCZOS)
+        img.thumbnail((LOGO_SAMPLE_SIZE, LOGO_SAMPLE_SIZE), Image.Resampling.LANCZOS)
 
         # Keep only visible-ish pixels to avoid transparent padding bias.
         visible = []
         for r, g, b, a in img.getdata():
-            if a >= 40:
+            if a >= ALPHA_VISIBILITY_THRESHOLD:
                 visible.append((r, g, b))
 
         if not visible:
@@ -296,7 +304,7 @@ def _extract_logo_gradient_style(logo_path):
         # Reduce to representative palette; keeps dominant logo colors.
         palette_img = Image.new("RGB", (len(visible), 1))
         palette_img.putdata(visible)
-        pal = palette_img.quantize(colors=6, method=Image.Quantize.MEDIANCUT)
+        pal = palette_img.quantize(colors=LOGO_PALETTE_SIZE, method=Image.Quantize.MEDIANCUT)
         rgb_pal = pal.convert("RGB")
         counts = rgb_pal.getcolors(maxcolors=256) or []
         if not counts:
@@ -308,16 +316,16 @@ def _extract_logo_gradient_style(logo_path):
         primary = colors[0]
         secondary = None
         for c in colors[1:]:
-            if _color_distance(primary, c) >= 50:
+            if _color_distance(primary, c) >= MIN_COLOR_DISTANCE:
                 secondary = c
                 break
         if secondary is None:
             # Create a subtle two-tone gradient if logo is mostly one color.
             lum = _relative_luminance(primary)
             if lum < 0.5:
-                secondary = _mix_rgb(primary, (255, 255, 255), 0.30)
+                secondary = _mix_rgb(primary, (255, 255, 255), DARK_COLOR_BLEND_RATIO)
             else:
-                secondary = _mix_rgb(primary, (0, 0, 0), 0.25)
+                secondary = _mix_rgb(primary, (0, 0, 0), LIGHT_COLOR_BLEND_RATIO)
 
         mid = _mix_rgb(primary, secondary, 0.5)
         style = {

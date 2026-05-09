@@ -142,7 +142,11 @@ def _resolve_cached_schedule_path(cache_name):
     safe_name = os.path.basename(cache_name)
     path = os.path.join(SCHEDULE_CACHE_DIR, safe_name)
     resolved = os.path.realpath(path)
-    if os.path.commonpath([resolved, SCHEDULE_CACHE_DIR_REAL]) != SCHEDULE_CACHE_DIR_REAL:
+    try:
+        in_cache_dir = os.path.commonpath([resolved, SCHEDULE_CACHE_DIR_REAL]) == SCHEDULE_CACHE_DIR_REAL
+    except ValueError:
+        return None
+    if not in_cache_dir:
         return None
     return resolved
 
@@ -261,9 +265,10 @@ def generate():
         return redirect(url_for("index"))
 
     # Store a small server-side cache reference for regeneration.
-    _remove_cached_schedule(session.get("schedule_cache_file"))
     session.pop("csv_text", None)
+    old_cache_file = session.get("schedule_cache_file")
     session["schedule_cache_file"] = _cache_schedule_text(csv_text)
+    _remove_cached_schedule(old_cache_file)
     session["week_label"] = week_label
     session["div_label"] = div_label
     session["days_per_week"] = days_per_week

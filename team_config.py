@@ -9,19 +9,20 @@ import re
 import colorsys
 from PIL import Image
 
-# Logo palette extraction tuning constants
-LOGO_SAMPLE_SIZE = 64
-ALPHA_VISIBILITY_THRESHOLD = 40
-LOGO_PALETTE_SIZE = 10
-MIN_COLOR_DISTANCE = 50
-DARK_COLOR_BLEND_RATIO = 0.30
-LIGHT_COLOR_BLEND_RATIO = 0.25
-LUMINANCE_THRESHOLD_FOR_BLACK_TEXT = 0.6
-MIN_SATURATION_FOR_BRAND_COLOR = 0.25
-MIN_SATURATION_FOR_NON_NEUTRAL = 0.16
-MIN_LUMINANCE_FOR_BRAND_COLOR = 0.08
-MAX_LUMINANCE_FOR_BRAND_COLOR = 0.94
-LUMINANCE_THRESHOLD_FOR_SECONDARY_BLEND = 0.5
+# Logo palette extraction tuning constants.
+LOGO_SAMPLE_SIZE = 64  # Small sample is enough for palette extraction while staying fast.
+ALPHA_VISIBILITY_THRESHOLD = 40  # Ignore nearly transparent padding/background pixels.
+LOGO_PALETTE_SIZE = 10  # Keep enough palette entries to capture multi-color logos.
+LOGO_QUANTIZE_METHOD = Image.Quantize.MEDIANCUT
+MIN_COLOR_DISTANCE = 50  # Require visible separation between primary and secondary colors.
+DARK_COLOR_BLEND_RATIO = 0.30  # Lighten dark one-color logos for a usable two-tone gradient.
+LIGHT_COLOR_BLEND_RATIO = 0.25  # Darken bright one-color logos for a usable two-tone gradient.
+LUMINANCE_THRESHOLD_FOR_BLACK_TEXT = 0.6  # Switch to black text on light gradients.
+MIN_SATURATION_FOR_BRAND_COLOR = 0.25  # Prefer colorful tones over neutral black/white/gray.
+MIN_SATURATION_FOR_NON_NEUTRAL = 0.16  # Fallback filter when a logo is less saturated overall.
+MIN_LUMINANCE_FOR_BRAND_COLOR = 0.08  # Skip near-black background tones when possible.
+MAX_LUMINANCE_FOR_BRAND_COLOR = 0.94  # Skip near-white highlight/background tones when possible.
+LUMINANCE_THRESHOLD_FOR_SECONDARY_BLEND = 0.5  # Decide whether synthetic secondary should lighten or darken.
 
 
 def hex_to_rgb(hex_str):
@@ -333,7 +334,7 @@ def _extract_logo_gradient_style(logo_path):
         # Reduce to representative palette; keeps dominant logo colors.
         palette_img = Image.new("RGB", (len(visible), 1))
         palette_img.putdata(visible)
-        pal = palette_img.quantize(colors=LOGO_PALETTE_SIZE, method=Image.Quantize.MEDIANCUT)
+        pal = palette_img.quantize(colors=LOGO_PALETTE_SIZE, method=LOGO_QUANTIZE_METHOD)
         rgb_pal = pal.convert("RGB")
         counts = rgb_pal.getcolors(maxcolors=256) or []
         if not counts:

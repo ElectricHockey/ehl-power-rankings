@@ -142,7 +142,7 @@ def _resolve_cached_schedule_path(cache_name):
     safe_name = os.path.basename(cache_name)
     path = os.path.join(SCHEDULE_CACHE_DIR, safe_name)
     resolved = os.path.realpath(path)
-    if not resolved.startswith(SCHEDULE_CACHE_DIR_REAL):
+    if os.path.commonpath([resolved, SCHEDULE_CACHE_DIR_REAL]) != SCHEDULE_CACHE_DIR_REAL:
         return None
     return resolved
 

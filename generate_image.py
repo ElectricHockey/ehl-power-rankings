@@ -95,6 +95,14 @@ def _contrast_text_color(bg_rgb):
     return (0, 0, 0) if luminance >= 0.6 else (255, 255, 255)
 
 
+def _is_valid_gradient(gradient):
+    return (
+        isinstance(gradient, (list, tuple))
+        and len(gradient) == 2
+        and all(isinstance(c, (list, tuple)) and len(c) == 3 for c in gradient)
+    )
+
+
 def _draw_rounded_gradient(img, xy, radius, left_color, right_color):
     """Draw a horizontal gradient clipped to a rounded rectangle."""
     x0, y0, x1, y1 = xy
@@ -106,9 +114,9 @@ def _draw_rounded_gradient(img, xy, radius, left_color, right_color):
 
     grad = Image.new("RGB", (w, h))
     px = grad.load()
-    width_steps = max(1, w - 1)
+    gradient_divisor = max(1, w - 1)
     for x in range(w):
-        t = x / width_steps
+        t = x / gradient_divisor
         color = (
             int(round(left_color[0] + (right_color[0] - left_color[0]) * t)),
             int(round(left_color[1] + (right_color[1] - left_color[1]) * t)),
@@ -313,11 +321,7 @@ def generate_rankings_image(
         bar_x1, bar_y1 = BAR_RIGHT, y + ROW_HEIGHT - 5
         bar_h = bar_y1 - bar_y0
         gradient = style.get("bar_gradient")
-        if (
-            isinstance(gradient, (list, tuple))
-            and len(gradient) == 2
-            and all(isinstance(c, (list, tuple)) and len(c) == 3 for c in gradient)
-        ):
+        if _is_valid_gradient(gradient):
             _draw_rounded_gradient(img, (bar_x0, bar_y0, bar_x1, bar_y1), 14, gradient[0], gradient[1])
         else:
             _draw_rounded_rect(draw, (bar_x0, bar_y0, bar_x1, bar_y1), 14, style["bar_color"])

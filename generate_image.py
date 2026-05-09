@@ -21,6 +21,7 @@ RANK_BOX_W = 100
 BAR_LEFT = RANK_BOX_W + 6
 BAR_RIGHT = IMG_WIDTH - 60
 LOGO_SIZE = 90
+EHL_LOGO_BOTTOM_MARGIN = 10
 MOVEMENT_X = IMG_WIDTH - 35
 
 BG_COLOR = (0, 0, 0)
@@ -188,9 +189,10 @@ def generate_rankings_image(
     # we must subtract these origin offsets from the draw position.
     ehl_logo = _load_ehl_logo(logo_dir, 130)
     if ehl_logo:
-        logo_y_center = (HEADER_HEIGHT - ehl_logo.height) // 2
-        img.paste(ehl_logo, (20, logo_y_center), ehl_logo)
-        img.paste(ehl_logo, (IMG_WIDTH - 20 - ehl_logo.width, logo_y_center), ehl_logo)
+        # Keep X positions fixed; move logos lower between the title and top rank row.
+        logo_y_position = max(0, HEADER_HEIGHT - ehl_logo.height - EHL_LOGO_BOTTOM_MARGIN)
+        img.paste(ehl_logo, (20, logo_y_position), ehl_logo)
+        img.paste(ehl_logo, (IMG_WIDTH - 20 - ehl_logo.width, logo_y_position), ehl_logo)
 
     title_text = "POWER RANKINGS"
     bbox = draw.textbbox((0, 0), title_text, font=font_title)

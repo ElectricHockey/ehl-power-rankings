@@ -107,12 +107,8 @@ def _collect_gradient_overrides(form):
 
 def _remove_cached_schedule(cache_name):
     """Remove a cached schedule file by basename."""
-    if not cache_name:
-        return
-    safe_name = os.path.basename(cache_name)
-    path = os.path.join(SCHEDULE_CACHE_DIR, safe_name)
-    resolved = os.path.realpath(path)
-    if not resolved.startswith(os.path.realpath(SCHEDULE_CACHE_DIR)):
+    resolved = _resolve_cached_schedule_path(cache_name)
+    if not resolved:
         return
     if os.path.isfile(resolved):
         os.remove(resolved)
@@ -129,6 +125,17 @@ def _cache_schedule_text(csv_text):
 
 def _load_cached_schedule_text(cache_name):
     """Load CSV text from a server-side cache file by basename."""
+    resolved = _resolve_cached_schedule_path(cache_name)
+    if not resolved:
+        return None
+    if not os.path.isfile(resolved):
+        return None
+    with open(resolved, "r", encoding="utf-8") as f:
+        return f.read()
+
+
+def _resolve_cached_schedule_path(cache_name):
+    """Return a validated cached-schedule path or None."""
     if not cache_name:
         return None
     safe_name = os.path.basename(cache_name)
@@ -136,10 +143,7 @@ def _load_cached_schedule_text(cache_name):
     resolved = os.path.realpath(path)
     if not resolved.startswith(os.path.realpath(SCHEDULE_CACHE_DIR)):
         return None
-    if not os.path.isfile(resolved):
-        return None
-    with open(resolved, "r", encoding="utf-8") as f:
-        return f.read()
+    return resolved
 
 
 def _rgb_to_hex(rgb):

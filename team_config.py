@@ -21,6 +21,7 @@ MIN_SATURATION_FOR_BRAND_COLOR = 0.25
 MIN_SATURATION_FOR_NON_NEUTRAL = 0.16
 MIN_LUMINANCE_FOR_BRAND_COLOR = 0.08
 MAX_LUMINANCE_FOR_BRAND_COLOR = 0.94
+LUMINANCE_THRESHOLD_FOR_SECONDARY_BLEND = 0.5
 
 
 def hex_to_rgb(hex_str):
@@ -359,7 +360,7 @@ def _extract_logo_gradient_style(logo_path):
         if secondary is None:
             # Create a subtle two-tone gradient if logo is mostly one color.
             lum = _relative_luminance(primary)
-            if lum < 0.5:
+            if lum < LUMINANCE_THRESHOLD_FOR_SECONDARY_BLEND:
                 secondary = _mix_rgb(primary, (255, 255, 255), DARK_COLOR_BLEND_RATIO)
             else:
                 secondary = _mix_rgb(primary, (0, 0, 0), LIGHT_COLOR_BLEND_RATIO)

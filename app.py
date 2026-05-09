@@ -142,7 +142,8 @@ def generate():
                 flash(
                     "No teams or games found in the file. "
                     "Expected columns include Home Team, Away Team, Home Score, Away Score, and Status "
-                    "(plus optional Game#/Time and OT columns).",
+                    "(plus optional Game#/Time and OT columns). "
+                    "Headers are auto-detected and case-insensitive.",
                     "error",
                 )
             if os.path.exists(saved_path):

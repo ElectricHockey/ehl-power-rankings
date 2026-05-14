@@ -234,9 +234,14 @@ def parse_schedule(csv_text):
         if not row:
             continue
 
-        # Update column indices whenever a header row appears.
-        col_idx, is_header = _infer_columns(row, col_idx)
+        # Update column indices only when a header row is detected.
+        # Applying the result for every row (not just headers) can
+        # accidentally remap columns when game-data cells happen to
+        # match a header keyword (e.g. the literal "OT" in an OT game
+        # row would re-assign col_idx['ot'] mid-schedule).
+        new_col_idx, is_header = _infer_columns(row, col_idx)
         if is_header:
+            col_idx = new_col_idx
             continue
 
         # Find first non-empty cell to detect game/date rows robustly.
@@ -275,10 +280,13 @@ def parse_schedule(csv_text):
         home_team = get_team(home_name)
         away_team = get_team(away_name)
 
-        # Check OT marker column (if present)
+        # Check OT marker column (if present).
+        # Accept "OT", "OTW", "OT WIN", "YES", "Y", "1" as overtime
+        # indicators so that different export formats are handled.
         is_ot = False
         middle = _get_cell(row, col_idx['ot'])
-        if middle.upper() == 'OT':
+        middle_up = middle.strip().upper()
+        if middle_up in ('OT', 'OTW', 'OT WIN', 'OVERTIME', 'YES', 'Y', '1'):
             is_ot = True
 
         try:
@@ -288,9 +296,18 @@ def parse_schedule(csv_text):
             continue
 
         # Normalize status values for different export layouts.
-        if status_norm in ('', 'completed', 'complete', 'final'):
+        # Accept exact matches and also prefix-based variants such as
+        # "Final/OT", "Final OT", "Completed OT", and bare "OT".
+        _status_is_completed = (
+            status_norm in ('', 'completed', 'complete', 'final', 'ot')
+            or status_norm.startswith('final')
+            or status_norm.startswith('complet')
+        )
+        if _status_is_completed:
             normalized_status = 'completed'
-            # Some layouts use values like "Final/OT" in status.
+            # Layouts that put "Final/OT" or "Final OT" in the status
+            # column signal overtime; mark is_ot here if the OT column
+            # did not already do so.
             if 'ot' in status_norm:
                 is_ot = True
         elif status_norm in ('forfeit', 'forfeited'):

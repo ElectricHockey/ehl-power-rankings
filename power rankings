@@ -299,7 +299,7 @@ def parse_schedule(csv_text):
         # Accept exact matches and also prefix-based variants such as
         # "Final/OT", "Final OT", "Completed OT", and bare "OT".
         _status_is_completed = (
-            status_norm in ('', 'completed', 'complete', 'final', 'ot')
+            status_norm in ('', 'ot')
             or status_norm.startswith('final')
             or status_norm.startswith('complet')
         )

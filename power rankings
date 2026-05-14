@@ -201,6 +201,10 @@ def parse_schedule(csv_text):
                 inferred['away_name'] = i
                 found.add('away_name')
                 continue
+            if c in ('visitor', 'visitors') or ('visiting' in c and 'team' in c):
+                inferred['away_name'] = i
+                found.add('away_name')
+                continue
             if c in ('ot', 'overtime'):
                 inferred['ot'] = i
                 found.add('ot')
@@ -268,8 +272,8 @@ def parse_schedule(csv_text):
 
         status_norm = status.lower()
 
-        # Skip if team names are missing
-        if not home_name or not away_name:
+        # Skip if team names are missing or identical (self-play from bad column mapping)
+        if not home_name or not away_name or home_name == away_name:
             continue
 
         home_team = get_team(home_name)
@@ -293,8 +297,16 @@ def parse_schedule(csv_text):
             # Some layouts use values like "Final/OT" in status.
             if 'ot' in status_norm:
                 is_ot = True
+            # Tied scores for a completed game means the row is unplayed or
+            # corrupt — hockey never ends tied. Skip to avoid awarding a
+            # spurious win to the away team via the else-branch below.
+            if home_score == away_score:
+                continue
         elif status_norm in ('forfeit', 'forfeited'):
             normalized_status = 'forfeit'
+            # Can't determine who forfeited from a 0-0 (or tied) score.
+            if home_score == away_score:
+                continue
         elif status_norm in ('incomplete', 'in progress', 'scheduled', 'postponed'):
             continue
         else:

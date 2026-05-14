@@ -82,6 +82,55 @@ def _draw_rounded_rect(draw, xy, radius, fill):
     draw.rounded_rectangle(xy, radius=r, fill=fill)
 
 
+def _blend_rgb(c1, c2, t=0.5):
+    return (
+        int(round(c1[0] + (c2[0] - c1[0]) * t)),
+        int(round(c1[1] + (c2[1] - c1[1]) * t)),
+        int(round(c1[2] + (c2[2] - c1[2]) * t)),
+    )
+
+
+def _contrast_text_color(bg_rgb):
+    luminance = (0.2126 * bg_rgb[0] + 0.7152 * bg_rgb[1] + 0.0722 * bg_rgb[2]) / 255.0
+    return (0, 0, 0) if luminance >= 0.6 else (255, 255, 255)
+
+
+def _is_valid_gradient(gradient):
+    return (
+        isinstance(gradient, (list, tuple))
+        and len(gradient) == 2
+        and all(isinstance(c, (list, tuple)) and len(c) == 3 for c in gradient)
+    )
+
+
+def _draw_rounded_gradient(img, xy, radius, left_color, right_color):
+    """Draw a horizontal gradient clipped to a rounded rectangle."""
+    x0, y0, x1, y1 = xy
+    if x1 <= x0 or y1 <= y0:
+        return
+    w = max(1, x1 - x0)
+    h = max(1, y1 - y0)
+    r = min(radius, w // 2, h // 2)
+
+    grad = Image.new("RGB", (w, h))
+    px = grad.load()
+    max_x = max(1, w - 1)
+    for x in range(w):
+        t = x / max_x
+        color = (
+            int(round(left_color[0] + (right_color[0] - left_color[0]) * t)),
+            int(round(left_color[1] + (right_color[1] - left_color[1]) * t)),
+            int(round(left_color[2] + (right_color[2] - left_color[2]) * t)),
+        )
+        for y in range(h):
+            px[x, y] = color
+
+    mask = Image.new("L", (w, h), 0)
+    mask_draw = ImageDraw.Draw(mask)
+    mask_draw.rounded_rectangle((0, 0, w - 1, h - 1), radius=r, fill=255)
+    img.paste(grad, (x0, y0), mask)
+
+
 # Default font sizes – can be overridden via font_overrides parameter
 DEFAULT_FONT_SIZES = {
     "title": 80,
@@ -121,6 +170,8 @@ def generate_rankings_image(
     output_path="power_rankings.png",
     top_n=10,
     color_overrides=None,
+    gradient_overrides=None,
+    text_mode_overrides=None,
     font_overrides=None,
     movement=None,
 ):
@@ -143,6 +194,11 @@ def generate_rankings_image(
         How many teams to show in the image (default 10).
     color_overrides : dict or None
         Optional {team_name: "#RRGGBB"} to override bar colors.
+    gradient_overrides : dict or None
+        Optional {team_name: ("#RRGGBB", "#RRGGBB")} to override gradient
+        start/end colors.
+    text_mode_overrides : dict or None
+        Optional {team_name: "auto"|"light"|"dark"} to override team-name text.
     font_overrides : dict or None
         Optional {"title": int, "subtitle": int, "team": int, "rank": int}
         to override default font sizes (in pt).
@@ -157,6 +213,10 @@ def generate_rankings_image(
     """
     if color_overrides is None:
         color_overrides = {}
+    if gradient_overrides is None:
+        gradient_overrides = {}
+    if text_mode_overrides is None:
+        text_mode_overrides = {}
     if movement is None:
         movement = {}
 
@@ -230,6 +290,25 @@ def generate_rankings_image(
             if rgb:
                 style = dict(style)  # copy to avoid mutating config
                 style["bar_color"] = rgb
+                style.pop("bar_gradient", None)
+                style["text_color"] = _contrast_text_color(rgb)
+        if team.name in gradient_overrides:
+            gradient_hex = gradient_overrides[team.name]
+            if isinstance(gradient_hex, (list, tuple)) and len(gradient_hex) == 2:
+                start_rgb = hex_to_rgb(gradient_hex[0])
+                end_rgb = hex_to_rgb(gradient_hex[1])
+                if start_rgb and end_rgb:
+                    style = dict(style)
+                    style["bar_color"] = start_rgb
+                    style["bar_gradient"] = (start_rgb, end_rgb)
+                    style["text_color"] = _contrast_text_color(_blend_rgb(start_rgb, end_rgb))
+        text_mode = text_mode_overrides.get(team.name)
+        if text_mode == "light":
+            style = dict(style)
+            style["text_color"] = (255, 255, 255)
+        elif text_mode == "dark":
+            style = dict(style)
+            style["text_color"] = (0, 0, 0)
 
         # Rank box (red rounded rectangle)
         rank_x0, rank_y0 = 10, y + 5
@@ -253,7 +332,11 @@ def generate_rankings_image(
         bar_x0, bar_y0 = BAR_LEFT, y + 5
         bar_x1, bar_y1 = BAR_RIGHT, y + ROW_HEIGHT - 5
         bar_h = bar_y1 - bar_y0
-        _draw_rounded_rect(draw, (bar_x0, bar_y0, bar_x1, bar_y1), 14, style["bar_color"])
+        gradient = style.get("bar_gradient")
+        if _is_valid_gradient(gradient):
+            _draw_rounded_gradient(img, (bar_x0, bar_y0, bar_x1, bar_y1), 14, gradient[0], gradient[1])
+        else:
+            _draw_rounded_rect(draw, (bar_x0, bar_y0, bar_x1, bar_y1), 14, style["bar_color"])
 
         # Team logo (drawn first so we know the exact reserved space)
         logo_img = _load_team_logo(logo_dir, style.get("logo"), LOGO_SIZE)

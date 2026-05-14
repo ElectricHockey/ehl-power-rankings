@@ -35,6 +35,24 @@
       max-width: 800px;
       width: 100%;
     }
+    .flash {
+      max-width: 800px;
+      width: calc(100% - 40px);
+      border-radius: 10px;
+      padding: 14px 18px;
+      margin: 20px 20px 0;
+      font-weight: 600;
+    }
+    .flash-success {
+      background: #17361d;
+      border: 1px solid #2c7a38;
+      color: #c6f6d5;
+    }
+    .flash-error {
+      background: #3a1717;
+      border: 1px solid #8b2c2c;
+      color: #fed7d7;
+    }
     table {
       width: 100%;
       border-collapse: collapse;
@@ -109,14 +127,19 @@
     }
     .color-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px 16px;
+      grid-template-columns: 1fr;
+      gap: 10px;
       margin-bottom: 16px;
+      max-height: 50vh;
+      overflow-y: auto;
+      padding-right: 6px;
+      touch-action: pan-y;
     }
     .color-item {
-      display: flex;
+      display: grid;
+      grid-template-columns: minmax(160px, 1fr) auto auto auto;
+      gap: 10px;
       align-items: center;
-      gap: 8px;
     }
     .color-item input[type="color"] {
       width: 40px;
@@ -127,6 +150,7 @@
       cursor: pointer;
       padding: 2px;
       flex-shrink: 0;
+      touch-action: manipulation;
     }
     .color-item .team-label {
       font-size: .9rem;
@@ -134,6 +158,31 @@
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+    }
+    .color-picker-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #999;
+      font-size: .78rem;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+    }
+    .text-mode-select {
+      background: #222;
+      border: 1px solid #444;
+      border-radius: 6px;
+      color: #eee;
+      padding: 6px 8px;
+      min-width: 82px;
+      touch-action: manipulation;
+    }
+    .scroll-help {
+      color: #888;
+      font-size: .82rem;
+      text-align: center;
+      margin-top: -2px;
+      margin-bottom: 12px;
     }
     .regen-btn {
       display: block;
@@ -197,6 +246,14 @@
     <p>{{ div_label }} {{ week_label }} — {{ total_ranked }} teams ranked</p>
   </header>
 
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div class="flash flash-{{ category }}">{{ message }}</div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
   <div class="card">
     <table>
       <thead>
@@ -230,13 +287,29 @@
   <div class="card">
     <form action="{{ url_for('regenerate') }}" method="post">
       <div class="color-section">
-        <h3>🎨 Customize Team Colors</h3>
+        <h3>🎨 Customize Team Gradients</h3>
+        <p class="scroll-help">Scroll inside this list to reach more teams, then regenerate to save the changes in the repo.</p>
         <div class="color-grid">
           {% for tc in team_colors %}
           <div class="color-item">
             <input type="hidden" name="team_name[]" value="{{ tc.name }}">
-            <input type="color" name="team_color[]" value="{{ tc.color }}">
             <span class="team-label">{{ tc.name }}</span>
+            <label class="color-picker-group">
+              <span>Start</span>
+              <input type="color" name="team_color_start[]" value="{{ tc.color_start }}">
+            </label>
+            <label class="color-picker-group">
+              <span>End</span>
+              <input type="color" name="team_color_end[]" value="{{ tc.color_end }}">
+            </label>
+            <label class="color-picker-group">
+              <span>Text</span>
+              <select name="team_text_mode[]" class="text-mode-select">
+                <option value="auto" {% if tc.text_mode == "auto" %}selected{% endif %}>Auto</option>
+                <option value="light" {% if tc.text_mode == "light" %}selected{% endif %}>Light</option>
+                <option value="dark" {% if tc.text_mode == "dark" %}selected{% endif %}>Dark</option>
+              </select>
+            </label>
           </div>
           {% endfor %}
         </div>
